@@ -8,16 +8,37 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+from typing import Callable, TypeVar
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
+from psycopg import Error as PsycopgError
 
 from app.briefing import build_interview_briefing
+from app.database import get_connection
 from app.matching import score_job_match
+from app.repositories import (
+    candidate_from_row,
+    create_candidate,
+    create_interview_briefing,
+    create_job,
+    create_match_result,
+    get_candidate,
+    get_job,
+    get_match_result,
+    job_from_row,
+    list_candidates,
+    list_interview_briefings,
+    list_jobs,
+    list_match_results,
+    match_from_row,
+)
 from app.schemas import (
     BriefingRequest,
     CandidateProfile,
     JobDescription,
     MatchRequest,
+    PersistBriefingRequest,
+    PersistMatchRequest,
 )
 
 app = FastAPI(
@@ -25,6 +46,8 @@ app = FastAPI(
     version="0.1.0",
     description="MVP backend for ATS matching and interview briefing demos.",
 )
+
+T = TypeVar("T")
 
 
 def _example_profile_path() -> Path:
@@ -89,3 +112,102 @@ def demo_match() -> dict:
         nice_to_have_skills=["FastAPI", "PostgreSQL", "prompt engineering"],
     )
     return score_job_match(candidate, job).model_dump()
+
+
+@app.post("/candidates")
+def persist_candidate(candidate: CandidateProfile) -> dict:
+    return _run_database_operation(
+        lambda connection: create_candidate(connection, candidate)
+    )
+
+
+@app.get("/candidates")
+def get_candidates() -> list[dict]:
+    return _run_database_operation(list_candidates)
+
+
+@app.post("/jobs")
+def persist_job(job: JobDescription) -> dict:
+    return _run_database_operation(lambda connection: create_job(connection, job))
+
+
+@app.get("/jobs")
+def get_jobs() -> list[dict]:
+    return _run_database_operation(list_jobs)
+
+
+@app.post("/matches/persist")
+def persist_match(request: PersistMatchRequest) -> dict:
+    def operation(connection):
+        candidate_row = _require_row(
+            get_candidate(connection, request.candidate_profile_id),
+            "Candidate profile not found",
+        )
+        job_row = _require_row(
+            get_job(connection, request.job_description_id),
+            "Job description not found",
+        )
+        match = score_job_match(candidate_from_row(candidate_row), job_from_row(job_row))
+        return create_match_result(
+            connection,
+            request.candidate_profile_id,
+            request.job_description_id,
+            match,
+        )
+
+    return _run_database_operation(operation)
+
+
+@app.get("/matches")
+def get_matches() -> list[dict]:
+    return _run_database_operation(list_match_results)
+
+
+@app.post("/briefings/persist")
+def persist_briefing(request: PersistBriefingRequest) -> dict:
+    def operation(connection):
+        match_row = _require_row(
+            get_match_result(connection, request.match_result_id),
+            "Match result not found",
+        )
+        candidate_row = _require_row(
+            get_candidate(connection, match_row["candidate_profile_id"]),
+            "Candidate profile not found",
+        )
+        job_row = _require_row(
+            get_job(connection, match_row["job_description_id"]),
+            "Job description not found",
+        )
+        briefing = build_interview_briefing(
+            candidate_from_row(candidate_row),
+            job_from_row(job_row),
+            match_from_row(match_row),
+        )
+        return create_interview_briefing(
+            connection,
+            request.match_result_id,
+            briefing,
+        )
+
+    return _run_database_operation(operation)
+
+
+@app.get("/briefings")
+def get_briefings() -> list[dict]:
+    return _run_database_operation(list_interview_briefings)
+
+
+def _run_database_operation(operation: Callable[..., T]) -> T:
+    try:
+        with get_connection() as connection:
+            return operation(connection)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except PsycopgError as exc:
+        raise HTTPException(status_code=503, detail="Database operation failed") from exc
+
+
+def _require_row(row: dict | None, message: str) -> dict:
+    if row is None:
+        raise HTTPException(status_code=404, detail=message)
+    return row

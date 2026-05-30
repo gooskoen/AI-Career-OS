@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+from uuid import UUID
+
 from pydantic import BaseModel, Field
 
 
@@ -25,6 +27,7 @@ class JobDescription(BaseModel):
     description: str
     required_skills: list[str] = Field(default_factory=list)
     nice_to_have_skills: list[str] = Field(default_factory=list)
+    source_url: str | None = None
 
 
 class MatchRequest(BaseModel):
@@ -35,3 +38,12 @@ class MatchRequest(BaseModel):
 class BriefingRequest(BaseModel):
     candidate: CandidateProfile
     job: JobDescription
+
+
+class PersistMatchRequest(BaseModel):
+    candidate_profile_id: UUID
+    job_description_id: UUID
+
+
+class PersistBriefingRequest(BaseModel):
+    match_result_id: UUID
