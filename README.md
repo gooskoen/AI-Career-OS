@@ -1,14 +1,14 @@
 # AI-Career-OS
 
-[![CI](https://github.com/gooskoen/AI-Career-OS/actions/workflows/ci.yml/badge.svg?branch=codex/sprint-1-foundation)](https://github.com/gooskoen/AI-Career-OS/actions/workflows/ci.yml)
+[![CI](https://github.com/gooskoen/AI-Career-OS/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/gooskoen/AI-Career-OS/actions/workflows/ci.yml)
 
 An open-source AI-powered job hunting and career intelligence system.
 
 This repository currently contains a simple MVP foundation with mock/demo data only.
 Do not commit private CVs, LinkedIn exports, personal data, API keys, or real contacts.
 
-Sprint 1 includes a PostgreSQL schema, but API persistence is not implemented yet.
-The current API endpoints operate on request payloads and checked-in demo data only.
+Sprint 2 adds PostgreSQL persistence for structured MVP records. The demo endpoints
+still operate on checked-in mock data only.
 
 ## MVP Scope
 
@@ -18,13 +18,17 @@ The current API endpoints operate on request payloads and checked-in demo data o
 - ATS/job matching engine
 - Interview briefing generator
 - Docker Compose setup for API and database
+- PostgreSQL persistence endpoints for Sprint 2
 
 ## Persistence Status
 
 The PostgreSQL schema in `database/schema.sql` defines the planned data model for
-candidate profiles, job descriptions, match results, and interview briefings. Sprint 1
-does not yet connect the FastAPI endpoints to PostgreSQL; database persistence will be
-added in a later sprint.
+candidate profiles, job descriptions, match results, and interview briefings.
+
+Sprint 2 adds MVP PostgreSQL persistence through small repository functions using
+`psycopg`. The API stores structured candidate profiles, job descriptions, match
+results, and interview briefings. It does not store private CV files, LinkedIn exports,
+recruiter contacts, API keys, or other secret/private source files.
 
 ## Architecture
 
@@ -35,6 +39,8 @@ AI-Career-OS
 |   |   +-- main.py        # FastAPI routes
 |   |   +-- matching.py    # ATS-style keyword matching
 |   |   +-- briefing.py    # Interview briefing generator
+|   |   +-- database.py    # PostgreSQL connection helper
+|   |   +-- repositories.py # Data-access functions
 |   |   +-- schemas.py     # Pydantic request/response models
 |   +-- Dockerfile
 |   +-- requirements.txt
@@ -72,6 +78,57 @@ Useful endpoints:
 - `GET /demo/match`
 - `POST /match`
 - `POST /briefing`
+- `POST /candidates`
+- `GET /candidates`
+- `POST /jobs`
+- `GET /jobs`
+- `POST /matches/persist`
+- `GET /matches`
+- `POST /briefings/persist`
+- `GET /briefings`
+
+## Sprint 2 Persistence Usage
+
+Start the stack with PostgreSQL:
+
+```bash
+cp .env.example .env
+docker compose up --build
+```
+
+Create a candidate profile:
+
+```bash
+curl -X POST http://localhost:8000/candidates \
+  -H "Content-Type: application/json" \
+  -d @examples/candidate_profile.example.json
+```
+
+Create a job description:
+
+```bash
+curl -X POST http://localhost:8000/jobs \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "AI Product Operations Lead",
+    "company": "ExampleTech",
+    "description": "Lead AI product operations and workflow automation.",
+    "required_skills": ["AI strategy", "workflow automation"],
+    "nice_to_have_skills": ["FastAPI", "PostgreSQL"]
+  }'
+```
+
+Persisted matches and briefings are created from stored record IDs:
+
+```bash
+curl -X POST http://localhost:8000/matches/persist \
+  -H "Content-Type: application/json" \
+  -d '{"candidate_profile_id":"<candidate-id>","job_description_id":"<job-id>"}'
+
+curl -X POST http://localhost:8000/briefings/persist \
+  -H "Content-Type: application/json" \
+  -d '{"match_result_id":"<match-id>"}'
+```
 
 ## Local Backend Development
 
