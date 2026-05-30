@@ -7,8 +7,8 @@ An open-source AI-powered job hunting and career intelligence system.
 This repository currently contains a simple MVP foundation with mock/demo data only.
 Do not commit private CVs, LinkedIn exports, personal data, API keys, or real contacts.
 
-Sprint 2 adds PostgreSQL persistence for structured MVP records. The demo endpoints
-still operate on checked-in mock data only.
+Sprint 3 adds a simple job ingestion layer for importing job vacancies from raw text
+or safe public URLs into PostgreSQL.
 
 ## MVP Scope
 
@@ -19,6 +19,7 @@ still operate on checked-in mock data only.
 - Interview briefing generator
 - Docker Compose setup for API and database
 - PostgreSQL persistence endpoints for Sprint 2
+- Job ingestion endpoints for Sprint 3
 
 ## Persistence Status
 
@@ -30,6 +31,10 @@ Sprint 2 adds MVP PostgreSQL persistence through small repository functions usin
 results, and interview briefings. It does not store private CV files, LinkedIn exports,
 recruiter contacts, API keys, or other secret/private source files.
 
+The Sprint 3 ingestion layer is not a crawler and does not bypass website terms,
+authentication, robots controls, paywalls, or session-based access. It only supports
+simple HTTP GET requests against safe public `http` and `https` URLs.
+
 ## Architecture
 
 ```text
@@ -40,6 +45,7 @@ AI-Career-OS
 |   |   +-- matching.py    # ATS-style keyword matching
 |   |   +-- briefing.py    # Interview briefing generator
 |   |   +-- database.py    # PostgreSQL connection helper
+|   |   +-- ingestion.py   # Job text and URL import helpers
 |   |   +-- repositories.py # Data-access functions
 |   |   +-- schemas.py     # Pydantic request/response models
 |   +-- Dockerfile
@@ -82,6 +88,8 @@ Useful endpoints:
 - `GET /candidates`
 - `POST /jobs`
 - `GET /jobs`
+- `POST /jobs/import-text`
+- `POST /jobs/import-url`
 - `POST /matches/persist`
 - `GET /matches`
 - `POST /briefings/persist`
@@ -129,6 +137,46 @@ curl -X POST http://localhost:8000/briefings/persist \
   -H "Content-Type: application/json" \
   -d '{"match_result_id":"<match-id>"}'
 ```
+
+## Sprint 3 Job Ingestion Usage
+
+Import a job from raw text:
+
+```bash
+curl -X POST http://localhost:8000/jobs/import-text \
+  -H "Content-Type: application/json" \
+  -d '{
+    "raw_text": "AI Product Operations Lead\nLead workflow automation, analytics, SQL, Python, and stakeholder management.",
+    "source_url": "https://example.com/jobs/ai-product-operations-lead"
+  }'
+```
+
+Import a job from raw text and immediately match it against an existing candidate:
+
+```bash
+curl -X POST http://localhost:8000/jobs/import-text \
+  -H "Content-Type: application/json" \
+  -d '{
+    "raw_text": "Automation Program Manager\nOwn workflow automation, analytics, and responsible AI delivery.",
+    "match_candidate_id": "<candidate-id>"
+  }'
+```
+
+Import a job from a safe public URL:
+
+```bash
+curl -X POST http://localhost:8000/jobs/import-url \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://example.com/jobs/ai-product-operations-lead",
+    "match_candidate_id": "<candidate-id>"
+  }'
+```
+
+URL imports reject non-HTTP schemes, localhost/private network targets, credentialed
+URLs, oversized responses, and fetches that exceed the configured timeout. Do not use
+this layer for LinkedIn automation, credential-based scraping, cookies, session tokens,
+or paid scraping APIs.
 
 ## Local Backend Development
 
