@@ -1,5 +1,7 @@
 # AI-Career-OS
 
+[![CI](https://github.com/gooskoen/AI-Career-OS/actions/workflows/ci.yml/badge.svg?branch=codex/sprint-1-foundation)](https://github.com/gooskoen/AI-Career-OS/actions/workflows/ci.yml)
+
 An open-source AI-powered job hunting and career intelligence system.
 
 This repository currently contains a simple MVP foundation with mock/demo data only.
