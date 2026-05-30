@@ -47,3 +47,14 @@ class PersistMatchRequest(BaseModel):
 
 class PersistBriefingRequest(BaseModel):
     match_result_id: UUID
+
+
+class JobImportTextRequest(BaseModel):
+    raw_text: str
+    source_url: str | None = None
+    match_candidate_id: UUID | None = None
+
+
+class JobImportUrlRequest(BaseModel):
+    url: str
+    match_candidate_id: UUID | None = None
