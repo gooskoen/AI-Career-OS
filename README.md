@@ -7,6 +7,9 @@ An open-source AI-powered job hunting and career intelligence system.
 This repository currently contains a simple MVP foundation with mock/demo data only.
 Do not commit private CVs, LinkedIn exports, personal data, API keys, or real contacts.
 
+Sprint 1 includes a PostgreSQL schema, but API persistence is not implemented yet.
+The current API endpoints operate on request payloads and checked-in demo data only.
+
 ## MVP Scope
 
 - FastAPI backend
@@ -15,6 +18,13 @@ Do not commit private CVs, LinkedIn exports, personal data, API keys, or real co
 - ATS/job matching engine
 - Interview briefing generator
 - Docker Compose setup for API and database
+
+## Persistence Status
+
+The PostgreSQL schema in `database/schema.sql` defines the planned data model for
+candidate profiles, job descriptions, match results, and interview briefings. Sprint 1
+does not yet connect the FastAPI endpoints to PostgreSQL; database persistence will be
+added in a later sprint.
 
 ## Architecture
 
@@ -41,6 +51,12 @@ Run the full stack:
 
 ```bash
 docker compose up --build
+```
+
+Optional local environment setup:
+
+```bash
+cp .env.example .env
 ```
 
 Open the API docs:
