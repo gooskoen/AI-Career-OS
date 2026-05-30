@@ -1,0 +1,30 @@
+{
+  "name": "Alex Demo",
+  "headline": "AI product operations and automation specialist",
+  "location": "Remote",
+  "summary": "Demo candidate with experience turning ambiguous business workflows into practical AI-enabled operating systems.",
+  "target_roles": [
+    "AI Product Operations Lead",
+    "Automation Program Manager",
+    "Career Intelligence Product Manager"
+  ],
+  "skills": [
+    "AI strategy",
+    "workflow automation",
+    "stakeholder management",
+    "analytics",
+    "prompt engineering",
+    "FastAPI",
+    "PostgreSQL",
+    "responsible AI"
+  ],
+  "experience_highlights": [
+    "Designed workflow automation prototypes for recruiting and career operations use cases.",
+    "Built analytics dashboards to prioritize product and process improvements.",
+    "Facilitated stakeholder discovery sessions and translated needs into delivery roadmaps.",
+    "Created responsible AI review checklists for demo product launches."
+  ],
+  "portfolio_links": [
+    "https://example.com/demo-portfolio"
+  ]
+}
