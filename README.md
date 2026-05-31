@@ -203,7 +203,8 @@ or paid scraping APIs.
 ## Sprint 4 Matching And Gap Analysis
 
 Sprint 4 keeps matching deterministic. The `POST /match` endpoint returns an overall
-score, a score breakdown, strengths, gaps, and recommended actions.
+score, weighted score breakdown, matched and missing skills, ranked strengths,
+critical/moderate/optional gaps, recommended actions, and a reasoning summary.
 
 ```bash
 curl -X POST http://localhost:8000/match \
