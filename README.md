@@ -21,6 +21,7 @@ or safe public URLs into PostgreSQL.
 - PostgreSQL persistence endpoints for Sprint 2
 - Job ingestion endpoints for Sprint 3
 - Deterministic matching and gap analysis for Sprint 4
+- Deterministic application package generation for Sprint 5
 
 ## Persistence Status
 
@@ -44,6 +45,7 @@ AI-Career-OS
 |   +-- app/
 |   |   +-- main.py        # FastAPI routes
 |   |   +-- matching.py    # ATS-style keyword matching
+|   |   +-- application_package.py # Template-based application materials
 |   |   +-- briefing.py    # Interview briefing generator
 |   |   +-- database.py    # PostgreSQL connection helper
 |   |   +-- ingestion.py   # Job text and URL import helpers
@@ -85,6 +87,7 @@ Useful endpoints:
 - `GET /demo/match`
 - `POST /match`
 - `POST /briefing`
+- `POST /applications/package`
 - `POST /candidates`
 - `GET /candidates`
 - `POST /jobs`
@@ -230,6 +233,52 @@ curl -X POST http://localhost:8000/match \
 ```
 
 No paid APIs, scraping, LinkedIn automation, or application sending are part of Sprint 4.
+
+## Sprint 5 Application Package Usage
+
+Sprint 5 generates deterministic, template-based application materials from a
+candidate profile, job description, and existing match result. It does not call LLMs,
+send email, automate LinkedIn, or apply to jobs.
+
+```bash
+curl -X POST http://localhost:8000/applications/package \
+  -H "Content-Type: application/json" \
+  -d '{
+    "candidate": {
+      "name": "Alex Demo",
+      "headline": "Automation specialist",
+      "location": "Remote",
+      "summary": "Builds analytics and workflow automation systems with 6 years of experience.",
+      "target_roles": ["AI Product Operations Lead"],
+      "skills": ["Python", "SQL", "Kubernetes", "workflow automation"],
+      "experience_highlights": ["Delivered Python analytics for operations teams."]
+    },
+    "job": {
+      "title": "AI Product Operations Lead",
+      "company": "ExampleTech",
+      "description": "Lead Python, SQL, workflow automation, and Kubernetes delivery.",
+      "required_skills": ["Python", "SQL", "Kubernetes"],
+      "nice_to_have_skills": ["GraphQL", "workflow automation"]
+    },
+    "match_result": {
+      "score": 82,
+      "score_breakdown": {"overall": 82, "keyword": 70, "required": 100, "nice_to_have": 50},
+      "matched_keywords": ["python", "sql"],
+      "missing_keywords": ["graphql"],
+      "matched_skills": ["Python", "SQL", "Kubernetes"],
+      "missing_skills": ["GraphQL"],
+      "strengths": [{"skill": "Python", "contribution": 60, "reason": "Matches a required skill.", "evidence": ["Delivered Python analytics for operations teams."]}],
+      "gaps": {"critical": [], "moderate": [], "optional": ["GraphQL"]},
+      "recommended_actions": ["Add a concise side project or learning note for GraphQL."],
+      "explanation": null,
+      "candidate_highlights": ["Delivered Python analytics for operations teams."],
+      "recommendation": "Strong match: tailor the application around the shared keywords."
+    }
+  }'
+```
+
+The response includes `tailored_summary`, `cover_letter`, `talking_points`,
+`key_strengths`, `risk_gaps`, and `recommended_cv_edits`.
 
 ## Local Backend Development
 

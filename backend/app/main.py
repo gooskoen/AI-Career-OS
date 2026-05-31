@@ -13,6 +13,10 @@ from typing import Callable, TypeVar
 from fastapi import FastAPI, HTTPException
 from psycopg import Error as PsycopgError
 
+from app.application_package import (
+    ApplicationPackageRequest,
+    build_application_package,
+)
 from app.briefing import build_interview_briefing
 from app.database import get_connection
 from app.ingestion import (
@@ -97,6 +101,16 @@ def match_job(request: MatchRequest) -> dict:
 def interview_briefing(request: BriefingRequest) -> dict:
     match = score_job_match(request.candidate, request.job)
     return build_interview_briefing(request.candidate, request.job, match)
+
+
+@app.post("/applications/package")
+def application_package(request: ApplicationPackageRequest) -> dict:
+    package = build_application_package(
+        request.candidate,
+        request.job,
+        request.match_result,
+    )
+    return package.model_dump()
 
 
 @app.get("/demo/match")
