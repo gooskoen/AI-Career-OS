@@ -43,6 +43,14 @@ from app.repositories.outcomes import (
     create_application_outcome,
     list_application_outcomes,
 )
+from app.repositories.users import (
+    create_auth_audit_event,
+    create_refresh_token_record,
+    create_user,
+    get_refresh_token_record,
+    get_user,
+    get_user_by_email,
+)
 
 __all__ = [
     "candidate_from_row",
@@ -52,16 +60,22 @@ __all__ = [
     "create_application",
     "create_application_note",
     "create_application_outcome",
+    "create_auth_audit_event",
     "create_candidate",
     "create_interview_briefing",
     "create_job",
     "create_match_result",
+    "create_refresh_token_record",
+    "create_user",
     "create_or_get_imported_job",
     "find_duplicate_job",
     "get_application",
     "get_candidate",
     "get_job",
     "get_match_result",
+    "get_refresh_token_record",
+    "get_user",
+    "get_user_by_email",
     "job_from_row",
     "latest_application_notes",
     "latest_application_outcome",

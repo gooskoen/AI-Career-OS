@@ -5,10 +5,10 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
 from app.briefing import build_interview_briefing
-from app.dependencies import require_row, run_database_operation
+from app.dependencies import current_user, require_row, run_database_operation
 from app.matching import score_job_match
 from app.repositories import (
     candidate_from_row,
@@ -70,10 +70,13 @@ def demo_match() -> dict:
 
 
 @router.post("/matches/persist")
-def persist_match(request: PersistMatchRequest) -> dict:
+def persist_match(
+    request: PersistMatchRequest,
+    user: dict = Depends(current_user),
+) -> dict:
     def operation(connection):
         candidate_row = require_row(
-            get_candidate(connection, request.candidate_profile_id),
+            get_candidate(connection, request.candidate_profile_id, user["id"]),
             "Candidate profile not found",
         )
         job_row = require_row(
@@ -86,25 +89,31 @@ def persist_match(request: PersistMatchRequest) -> dict:
             request.candidate_profile_id,
             request.job_description_id,
             match,
+            user["id"],
         )
 
     return run_database_operation(operation)
 
 
 @router.get("/matches")
-def get_matches() -> list[dict]:
-    return run_database_operation(list_match_results)
+def get_matches(user: dict = Depends(current_user)) -> list[dict]:
+    return run_database_operation(
+        lambda connection: list_match_results(connection, user["id"])
+    )
 
 
 @router.post("/briefings/persist")
-def persist_briefing(request: PersistBriefingRequest) -> dict:
+def persist_briefing(
+    request: PersistBriefingRequest,
+    user: dict = Depends(current_user),
+) -> dict:
     def operation(connection):
         match_row = require_row(
-            get_match_result(connection, request.match_result_id),
+            get_match_result(connection, request.match_result_id, user["id"]),
             "Match result not found",
         )
         candidate_row = require_row(
-            get_candidate(connection, match_row["candidate_profile_id"]),
+            get_candidate(connection, match_row["candidate_profile_id"], user["id"]),
             "Candidate profile not found",
         )
         job_row = require_row(
@@ -120,11 +129,14 @@ def persist_briefing(request: PersistBriefingRequest) -> dict:
             connection,
             request.match_result_id,
             briefing,
+            user["id"],
         )
 
     return run_database_operation(operation)
 
 
 @router.get("/briefings")
-def get_briefings() -> list[dict]:
-    return run_database_operation(list_interview_briefings)
+def get_briefings(user: dict = Depends(current_user)) -> list[dict]:
+    return run_database_operation(
+        lambda connection: list_interview_briefings(connection, user["id"])
+    )

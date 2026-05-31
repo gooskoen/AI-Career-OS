@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 
 from app.application_domain import (
     ApplicationCreateRequest,
@@ -21,7 +21,7 @@ from app.application_package import (
     ApplicationPackageRequest,
     build_application_package,
 )
-from app.dependencies import require_row, run_database_operation
+from app.dependencies import current_user, require_row, run_database_operation
 from app.repositories import (
     application_artifact_readiness,
     application_board,
@@ -40,7 +40,10 @@ router = APIRouter()
 
 
 @router.post("/applications/package")
-def application_package(request: ApplicationPackageRequest) -> dict:
+def application_package(
+    request: ApplicationPackageRequest,
+    user: dict = Depends(current_user),
+) -> dict:
     package = build_application_package(
         request.candidate,
         request.job,
@@ -50,9 +53,15 @@ def application_package(request: ApplicationPackageRequest) -> dict:
 
 
 @router.post("/applications")
-def persist_application(application: ApplicationCreateRequest) -> dict:
+def persist_application(
+    application: ApplicationCreateRequest,
+    user: dict = Depends(current_user),
+) -> dict:
     return run_database_operation(
-        lambda connection: create_application(connection, application)
+        lambda connection: require_row(
+            create_application(connection, application, user["id"]),
+            "Candidate profile not found",
+        )
     )
 
 
@@ -63,6 +72,7 @@ def get_applications(
     job_id: UUID | None = None,
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=50, ge=1, le=100),
+    user: dict = Depends(current_user),
 ) -> dict:
     def operation(connection):
         rows, total = list_applications(
@@ -72,6 +82,7 @@ def get_applications(
             job_id=job_id,
             page=page,
             page_size=page_size,
+            user_id=user["id"],
         )
         return paginated_response(
             rows,
@@ -86,17 +97,22 @@ def get_applications(
 @router.get("/applications/board")
 def get_application_board(
     page_size: int = Query(default=100, ge=1, le=500),
+    user: dict = Depends(current_user),
 ) -> dict:
     return run_database_operation(
-        lambda connection: application_board(connection, page_size=page_size)
+        lambda connection: application_board(
+            connection,
+            page_size=page_size,
+            user_id=user["id"],
+        )
     )
 
 
 @router.get("/applications/{application_id}")
-def read_application(application_id: UUID) -> dict:
+def read_application(application_id: UUID, user: dict = Depends(current_user)) -> dict:
     return run_database_operation(
         lambda connection: require_row(
-            get_application(connection, application_id),
+            get_application(connection, application_id, user["id"]),
             "Application not found",
         )
     )
@@ -106,10 +122,11 @@ def read_application(application_id: UUID) -> dict:
 def patch_application_status(
     application_id: UUID,
     status_update: ApplicationStatusUpdateRequest,
+    user: dict = Depends(current_user),
 ) -> dict:
     return run_database_operation(
         lambda connection: require_row(
-            update_application_status(connection, application_id, status_update),
+            update_application_status(connection, application_id, status_update, user["id"]),
             "Application not found",
         )
     )
@@ -119,6 +136,7 @@ def patch_application_status(
 def transition_application_status(
     application_id: UUID,
     transition: ApplicationTransitionRequest,
+    user: dict = Depends(current_user),
 ) -> dict:
     return run_database_operation(
         lambda connection: require_row(
@@ -126,6 +144,7 @@ def transition_application_status(
                 connection,
                 application_id,
                 ApplicationStatusUpdateRequest(status=transition.status),
+                user["id"],
             ),
             "Application not found",
         )
@@ -136,21 +155,30 @@ def transition_application_status(
 def patch_application_next_action(
     application_id: UUID,
     next_action: ApplicationNextActionRequest,
+    user: dict = Depends(current_user),
 ) -> dict:
     return run_database_operation(
         lambda connection: require_row(
-            update_application_next_action(connection, application_id, next_action),
+            update_application_next_action(
+                connection,
+                application_id,
+                next_action,
+                user["id"],
+            ),
             "Application not found",
         )
     )
 
 
 @router.get("/applications/{application_id}/readiness")
-def get_application_readiness(application_id: UUID) -> dict:
+def get_application_readiness(
+    application_id: UUID,
+    user: dict = Depends(current_user),
+) -> dict:
     return run_database_operation(
         lambda connection: application_artifact_readiness(
             require_row(
-                get_application(connection, application_id),
+                get_application(connection, application_id, user["id"]),
                 "Application not found",
             )
         )
@@ -158,19 +186,29 @@ def get_application_readiness(application_id: UUID) -> dict:
 
 
 @router.get("/applications/{application_id}/summary")
-def get_application_summary(application_id: UUID) -> dict:
+def get_application_summary(
+    application_id: UUID,
+    user: dict = Depends(current_user),
+) -> dict:
     return run_database_operation(
         lambda connection: require_row(
-            application_summary(connection, application_id),
+            application_summary(connection, application_id, user["id"]),
             "Application not found",
         )
     )
 
 
 @router.get("/applications/{application_id}/status-events")
-def get_application_status_events(application_id: UUID) -> list[dict]:
+def get_application_status_events(
+    application_id: UUID,
+    user: dict = Depends(current_user),
+) -> list[dict]:
     return run_database_operation(
-        lambda connection: list_application_status_events(connection, application_id)
+        lambda connection: list_application_status_events(
+            connection,
+            application_id,
+            user["id"],
+        )
     )
 
 
@@ -178,7 +216,11 @@ def get_application_status_events(application_id: UUID) -> list[dict]:
 def post_application_note(
     application_id: UUID,
     note: ApplicationNoteRequest,
+    user: dict = Depends(current_user),
 ) -> dict:
     return run_database_operation(
-        lambda connection: create_application_note(connection, application_id, note)
+        lambda connection: require_row(
+            create_application_note(connection, application_id, note, user["id"]),
+            "Application not found",
+        )
     )

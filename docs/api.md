@@ -7,6 +7,9 @@ Licensed under the Apache License, Version 2.0.
 ## Core endpoints
 
 - `GET /health`
+- `POST /auth/register`
+- `POST /auth/login`
+- `POST /auth/refresh`
 - `GET /demo/candidate`
 - `GET /demo/match`
 - `POST /match`
@@ -37,6 +40,48 @@ Licensed under the Apache License, Version 2.0.
 - `GET /matches`
 - `POST /briefings/persist`
 - `GET /briefings`
+
+## Authentication
+
+Sprint 11 introduces simple JWT authentication. Register or log in to receive an
+access token, then pass it as a bearer token to protected endpoints.
+
+```bash
+curl -X POST http://localhost:8000/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "demo@example.com",
+    "display_name": "Demo User",
+    "password": "use-a-long-demo-password"
+  }'
+```
+
+```bash
+curl -X POST http://localhost:8000/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "demo@example.com",
+    "password": "use-a-long-demo-password"
+  }'
+```
+
+Protected requests use:
+
+```bash
+curl http://localhost:8000/applications \
+  -H "Authorization: Bearer <access-token>"
+```
+
+Refresh tokens can be exchanged for a new access token:
+
+```bash
+curl -X POST http://localhost:8000/auth/refresh \
+  -H "Content-Type: application/json" \
+  -d '{"refresh_token": "<refresh-token>"}'
+```
+
+Candidate profiles, applications, notes, outcomes, persisted matches, and persisted
+briefings are scoped to the authenticated user.
 
 ## Application filtering and pagination
 
@@ -156,6 +201,6 @@ Validation errors return a standard error response:
 
 ## Guardrails
 
-The API does not implement reporting dashboards, recruiter CRM, authentication, LLM
-calls, web browsing, LinkedIn automation, automatic applications, email sending, or a
-dashboard frontend in Sprint 10.
+The API does not implement reporting dashboards, recruiter CRM, OAuth/social login,
+LLM calls, web browsing, LinkedIn automation, automatic applications, email sending,
+or a dashboard frontend in Sprint 11.

@@ -7,9 +7,9 @@ from __future__ import annotations
 
 import json
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
-from app.dependencies import example_profile_path, run_database_operation
+from app.dependencies import current_user, example_profile_path, run_database_operation
 from app.repositories import create_candidate, list_candidates
 from app.schemas import CandidateProfile
 
@@ -30,12 +30,12 @@ def demo_candidate() -> CandidateProfile:
 
 
 @router.post("/candidates")
-def persist_candidate(candidate: CandidateProfile) -> dict:
+def persist_candidate(candidate: CandidateProfile, user: dict = Depends(current_user)) -> dict:
     return run_database_operation(
-        lambda connection: create_candidate(connection, candidate)
+        lambda connection: create_candidate(connection, candidate, user["id"])
     )
 
 
 @router.get("/candidates")
-def get_candidates() -> list[dict]:
-    return run_database_operation(list_candidates)
+def get_candidates(user: dict = Depends(current_user)) -> list[dict]:
+    return run_database_operation(lambda connection: list_candidates(connection, user["id"]))

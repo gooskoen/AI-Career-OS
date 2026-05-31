@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from app.application_domain import ApplicationNoteRequest
+from app.dependencies import current_user
 from app.main import app
 from app.responses import PaginatedResponse, SuccessResponse, paginated_response
 from app.schemas import JobImportTextRequest
@@ -73,8 +74,13 @@ def test_note_validation_rejects_empty_notes() -> None:
 
 
 def test_validation_errors_use_standard_error_shape() -> None:
+    app.dependency_overrides[current_user] = lambda: {
+        "id": uuid4(),
+        "email": "demo@example.com",
+    }
     client = TestClient(app)
     response = client.post("/jobs/import-text", json={"raw_text": ""})
+    app.dependency_overrides.clear()
 
     assert response.status_code == 422
     body = response.json()
@@ -99,12 +105,14 @@ def test_applications_router_supports_pagination_filters(monkeypatch) -> None:
         job_id=None,
         page=1,
         page_size=50,
+        user_id=None,
     ):
         assert status == "applied"
         assert candidate_id == candidate_id_filter
         assert job_id == job_id_filter
         assert page == 2
         assert page_size == 10
+        assert user_id is not None
         return (
             [
                 {
@@ -133,6 +141,10 @@ def test_applications_router_supports_pagination_filters(monkeypatch) -> None:
         fake_list_applications,
     )
 
+    app.dependency_overrides[current_user] = lambda: {
+        "id": uuid4(),
+        "email": "demo@example.com",
+    }
     client = TestClient(app)
     response = client.get(
         "/applications",
@@ -144,6 +156,7 @@ def test_applications_router_supports_pagination_filters(monkeypatch) -> None:
             "page_size": 10,
         },
     )
+    app.dependency_overrides.clear()
 
     assert response.status_code == 200
     body = response.json()

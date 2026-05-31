@@ -22,11 +22,13 @@ from app.application_domain import (
 def create_application(
     connection: Connection,
     application: ApplicationCreateRequest,
+    user_id: UUID,
 ) -> dict:
     with connection.cursor() as cursor:
         cursor.execute(
             """
             INSERT INTO applications (
+                user_id,
                 candidate_id,
                 job_id,
                 status,
@@ -37,10 +39,44 @@ def create_application(
                 next_action,
                 next_action_due
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            SELECT %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+            WHERE EXISTS (
+                SELECT 1
+                FROM candidate_profiles
+                WHERE id = %s
+                  AND user_id = %s
+            )
+            AND (
+                %s::uuid IS NULL
+                OR EXISTS (
+                    SELECT 1
+                    FROM match_results
+                    WHERE id = %s
+                      AND user_id = %s
+                )
+            )
+            AND (
+                %s::uuid IS NULL
+                OR EXISTS (
+                    SELECT 1
+                    FROM application_packages
+                    WHERE id = %s
+                      AND user_id = %s
+                )
+            )
+            AND (
+                %s::uuid IS NULL
+                OR EXISTS (
+                    SELECT 1
+                    FROM company_intelligence_reports
+                    WHERE id = %s
+                      AND user_id = %s
+                )
+            )
             RETURNING *
             """,
             (
+                user_id,
                 application.candidate_id,
                 application.job_id,
                 application.status,
@@ -50,16 +86,44 @@ def create_application(
                 application.company_intelligence_id,
                 None,
                 None,
+                application.candidate_id,
+                user_id,
+                application.match_result_id,
+                application.match_result_id,
+                user_id,
+                application.application_package_id,
+                application.application_package_id,
+                user_id,
+                application.company_intelligence_id,
+                application.company_intelligence_id,
+                user_id,
             ),
         )
         created = cursor.fetchone()
+        if created is None:
+            return None
         _create_status_event(cursor, created["id"], None, created["status"])
         return created
 
 
-def get_application(connection: Connection, application_id: UUID) -> dict | None:
+def get_application(
+    connection: Connection,
+    application_id: UUID,
+    user_id: UUID | None = None,
+) -> dict | None:
     with connection.cursor() as cursor:
-        cursor.execute("SELECT * FROM applications WHERE id = %s", (application_id,))
+        if user_id is None:
+            cursor.execute("SELECT * FROM applications WHERE id = %s", (application_id,))
+        else:
+            cursor.execute(
+                """
+                SELECT *
+                FROM applications
+                WHERE id = %s
+                  AND user_id = %s
+                """,
+                (application_id, user_id),
+            )
         return cursor.fetchone()
 
 
@@ -71,6 +135,7 @@ def list_applications(
     job_id: UUID | None = None,
     page: int = 1,
     page_size: int = 50,
+    user_id: UUID | None = None,
 ) -> tuple[list[dict], int]:
     where_clauses = []
     params: list[object] = []
@@ -84,6 +149,9 @@ def list_applications(
     if job_id is not None:
         where_clauses.append("job_id = %s")
         params.append(job_id)
+    if user_id is not None:
+        where_clauses.append("user_id = %s")
+        params.append(user_id)
 
     where_sql = ""
     if where_clauses:
@@ -108,17 +176,23 @@ def list_applications(
         return cursor.fetchall(), total
 
 
-def application_board(connection: Connection, *, page_size: int = 100) -> dict[str, list[dict]]:
+def application_board(
+    connection: Connection,
+    *,
+    page_size: int = 100,
+    user_id: UUID,
+) -> dict[str, list[dict]]:
     board = {status: [] for status in APPLICATION_STATUSES}
     with connection.cursor() as cursor:
         cursor.execute(
             """
             SELECT *
             FROM applications
+            WHERE user_id = %s
             ORDER BY created_at DESC
             LIMIT %s
             """,
-            (page_size,),
+            (user_id, page_size),
         )
         for row in cursor.fetchall():
             if row["status"] in board:
@@ -130,9 +204,24 @@ def update_application_status(
     connection: Connection,
     application_id: UUID,
     status_update: ApplicationStatusUpdateRequest,
+    user_id: UUID | None = None,
 ) -> dict | None:
     with connection.cursor() as cursor:
-        cursor.execute("SELECT status FROM applications WHERE id = %s", (application_id,))
+        if user_id is None:
+            cursor.execute(
+                "SELECT status FROM applications WHERE id = %s",
+                (application_id,),
+            )
+        else:
+            cursor.execute(
+                """
+                SELECT status
+                FROM applications
+                WHERE id = %s
+                  AND user_id = %s
+                """,
+                (application_id, user_id),
+            )
         current = cursor.fetchone()
         if current is None:
             return None
@@ -144,9 +233,10 @@ def update_application_status(
             SET status = %s,
                 updated_at = now()
             WHERE id = %s
+              AND (%s::uuid IS NULL OR user_id = %s)
             RETURNING *
             """,
-            (status_update.status, application_id),
+            (status_update.status, application_id, user_id, user_id),
         )
         updated = cursor.fetchone()
         _create_status_event(
@@ -162,6 +252,7 @@ def update_application_next_action(
     connection: Connection,
     application_id: UUID,
     next_action: ApplicationNextActionRequest,
+    user_id: UUID,
 ) -> dict | None:
     with connection.cursor() as cursor:
         cursor.execute(
@@ -171,9 +262,10 @@ def update_application_next_action(
                 next_action_due = %s,
                 updated_at = now()
             WHERE id = %s
+              AND user_id = %s
             RETURNING *
             """,
-            (next_action.next_action, next_action.due_date, application_id),
+            (next_action.next_action, next_action.due_date, application_id, user_id),
         )
         updated = cursor.fetchone()
         return updated
@@ -190,17 +282,31 @@ def application_artifact_readiness(application: dict) -> dict:
 def list_application_status_events(
     connection: Connection,
     application_id: UUID,
+    user_id: UUID | None = None,
 ) -> list[dict]:
     with connection.cursor() as cursor:
-        cursor.execute(
-            """
-            SELECT *
-            FROM application_status_events
-            WHERE application_id = %s
-            ORDER BY created_at ASC
-            """,
-            (application_id,),
-        )
+        if user_id is None:
+            cursor.execute(
+                """
+                SELECT *
+                FROM application_status_events
+                WHERE application_id = %s
+                ORDER BY created_at ASC
+                """,
+                (application_id,),
+            )
+        else:
+            cursor.execute(
+                """
+                SELECT ase.*
+                FROM application_status_events ase
+                JOIN applications a ON a.id = ase.application_id
+                WHERE ase.application_id = %s
+                  AND a.user_id = %s
+                ORDER BY ase.created_at ASC
+                """,
+                (application_id, user_id),
+            )
         return cursor.fetchall()
 
 
@@ -208,18 +314,26 @@ def create_application_note(
     connection: Connection,
     application_id: UUID,
     note: ApplicationNoteRequest,
+    user_id: UUID,
 ) -> dict:
     with connection.cursor() as cursor:
         cursor.execute(
             """
             INSERT INTO application_notes (
+                user_id,
                 application_id,
                 note
             )
-            VALUES (%s, %s)
+            SELECT %s, %s, %s
+            WHERE EXISTS (
+                SELECT 1
+                FROM applications
+                WHERE id = %s
+                  AND user_id = %s
+            )
             RETURNING *
             """,
-            (application_id, sanitize_note(note.note)),
+            (user_id, application_id, sanitize_note(note.note), application_id, user_id),
         )
         return cursor.fetchone()
 
@@ -229,41 +343,73 @@ def latest_application_notes(
     application_id: UUID,
     *,
     limit: int = 5,
+    user_id: UUID | None = None,
 ) -> list[dict]:
     with connection.cursor() as cursor:
-        cursor.execute(
-            """
-            SELECT *
-            FROM application_notes
-            WHERE application_id = %s
-            ORDER BY created_at DESC
-            LIMIT %s
-            """,
-            (application_id, limit),
-        )
+        if user_id is None:
+            cursor.execute(
+                """
+                SELECT *
+                FROM application_notes
+                WHERE application_id = %s
+                ORDER BY created_at DESC
+                LIMIT %s
+                """,
+                (application_id, limit),
+            )
+        else:
+            cursor.execute(
+                """
+                SELECT *
+                FROM application_notes
+                WHERE application_id = %s
+                  AND user_id = %s
+                ORDER BY created_at DESC
+                LIMIT %s
+                """,
+                (application_id, user_id, limit),
+            )
         return cursor.fetchall()
 
 
 def latest_application_outcome(
     connection: Connection,
     application_id: UUID,
+    user_id: UUID | None = None,
 ) -> dict | None:
     with connection.cursor() as cursor:
-        cursor.execute(
-            """
-            SELECT *
-            FROM application_outcomes
-            WHERE application_id = %s
-            ORDER BY created_at DESC
-            LIMIT 1
-            """,
-            (application_id,),
-        )
+        if user_id is None:
+            cursor.execute(
+                """
+                SELECT *
+                FROM application_outcomes
+                WHERE application_id = %s
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                (application_id,),
+            )
+        else:
+            cursor.execute(
+                """
+                SELECT *
+                FROM application_outcomes
+                WHERE application_id = %s
+                  AND user_id = %s
+                ORDER BY created_at DESC
+                LIMIT 1
+                """,
+                (application_id, user_id),
+            )
         return cursor.fetchone()
 
 
-def application_summary(connection: Connection, application_id: UUID) -> dict | None:
-    application = get_application(connection, application_id)
+def application_summary(
+    connection: Connection,
+    application_id: UUID,
+    user_id: UUID,
+) -> dict | None:
+    application = get_application(connection, application_id, user_id)
     if application is None:
         return None
 
@@ -272,10 +418,10 @@ def application_summary(connection: Connection, application_id: UUID) -> dict | 
         "current_status": application["status"],
         "next_action": application.get("next_action"),
         "next_action_due": application.get("next_action_due"),
-        "latest_notes": latest_application_notes(connection, application_id),
+        "latest_notes": latest_application_notes(connection, application_id, user_id=user_id),
         "artifact_readiness": application_artifact_readiness(application),
-        "latest_outcome": latest_application_outcome(connection, application_id),
-        "status_history": list_application_status_events(connection, application_id),
+        "latest_outcome": latest_application_outcome(connection, application_id, user_id),
+        "status_history": list_application_status_events(connection, application_id, user_id),
     }
 
 

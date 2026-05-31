@@ -15,6 +15,7 @@ from app.errors import (
 )
 from app.routers import (
     applications,
+    auth,
     candidates,
     intelligence,
     jobs,
@@ -33,6 +34,7 @@ app.add_exception_handler(RequestValidationError, validation_exception_handler)
 app.add_exception_handler(Exception, internal_exception_handler)
 
 app.include_router(candidates.router)
+app.include_router(auth.router)
 app.include_router(jobs.router)
 app.include_router(matching.router)
 app.include_router(applications.router)

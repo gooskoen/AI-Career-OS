@@ -12,11 +12,16 @@ from psycopg import Connection
 from app.schemas import CandidateProfile
 
 
-def create_candidate(connection: Connection, candidate: CandidateProfile) -> dict:
+def create_candidate(
+    connection: Connection,
+    candidate: CandidateProfile,
+    user_id: UUID,
+) -> dict:
     with connection.cursor() as cursor:
         cursor.execute(
             """
             INSERT INTO candidate_profiles (
+                user_id,
                 display_name,
                 headline,
                 location,
@@ -26,10 +31,11 @@ def create_candidate(connection: Connection, candidate: CandidateProfile) -> dic
                 experience_highlights,
                 portfolio_links
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING *
             """,
             (
+                user_id,
                 candidate.name,
                 candidate.headline,
                 candidate.location,
@@ -43,15 +49,41 @@ def create_candidate(connection: Connection, candidate: CandidateProfile) -> dic
         return cursor.fetchone()
 
 
-def list_candidates(connection: Connection) -> list[dict]:
+def list_candidates(connection: Connection, user_id: UUID) -> list[dict]:
     with connection.cursor() as cursor:
-        cursor.execute("SELECT * FROM candidate_profiles ORDER BY created_at DESC")
+        cursor.execute(
+            """
+            SELECT *
+            FROM candidate_profiles
+            WHERE user_id = %s
+            ORDER BY created_at DESC
+            """,
+            (user_id,),
+        )
         return cursor.fetchall()
 
 
-def get_candidate(connection: Connection, candidate_id: UUID) -> dict | None:
+def get_candidate(
+    connection: Connection,
+    candidate_id: UUID,
+    user_id: UUID | None = None,
+) -> dict | None:
     with connection.cursor() as cursor:
-        cursor.execute("SELECT * FROM candidate_profiles WHERE id = %s", (candidate_id,))
+        if user_id is None:
+            cursor.execute(
+                "SELECT * FROM candidate_profiles WHERE id = %s",
+                (candidate_id,),
+            )
+        else:
+            cursor.execute(
+                """
+                SELECT *
+                FROM candidate_profiles
+                WHERE id = %s
+                  AND user_id = %s
+                """,
+                (candidate_id, user_id),
+            )
         return cursor.fetchone()
 
 

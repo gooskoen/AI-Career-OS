@@ -17,11 +17,13 @@ def create_match_result(
     candidate_id: UUID,
     job_id: UUID,
     match: MatchResult,
+    user_id: UUID,
 ) -> dict:
     with connection.cursor() as cursor:
         cursor.execute(
             """
             INSERT INTO match_results (
+                user_id,
                 candidate_profile_id,
                 job_description_id,
                 score,
@@ -29,10 +31,11 @@ def create_match_result(
                 missing_keywords,
                 recommendation
             )
-            VALUES (%s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
             RETURNING *
             """,
             (
+                user_id,
                 candidate_id,
                 job_id,
                 match.score,
@@ -44,15 +47,35 @@ def create_match_result(
         return cursor.fetchone()
 
 
-def list_match_results(connection: Connection) -> list[dict]:
+def list_match_results(connection: Connection, user_id: UUID) -> list[dict]:
     with connection.cursor() as cursor:
-        cursor.execute("SELECT * FROM match_results ORDER BY created_at DESC")
+        cursor.execute(
+            """
+            SELECT *
+            FROM match_results
+            WHERE user_id = %s
+            ORDER BY created_at DESC
+            """,
+            (user_id,),
+        )
         return cursor.fetchall()
 
 
-def get_match_result(connection: Connection, match_result_id: UUID) -> dict | None:
+def get_match_result(
+    connection: Connection,
+    match_result_id: UUID,
+    user_id: UUID,
+) -> dict | None:
     with connection.cursor() as cursor:
-        cursor.execute("SELECT * FROM match_results WHERE id = %s", (match_result_id,))
+        cursor.execute(
+            """
+            SELECT *
+            FROM match_results
+            WHERE id = %s
+              AND user_id = %s
+            """,
+            (match_result_id, user_id),
+        )
         return cursor.fetchone()
 
 
@@ -60,11 +83,13 @@ def create_interview_briefing(
     connection: Connection,
     match_result_id: UUID,
     briefing: dict,
+    user_id: UUID,
 ) -> dict:
     with connection.cursor() as cursor:
         cursor.execute(
             """
             INSERT INTO interview_briefings (
+                user_id,
                 match_result_id,
                 positioning_statement,
                 strengths_to_emphasize,
@@ -72,24 +97,41 @@ def create_interview_briefing(
                 likely_interview_topics,
                 questions_to_ask
             )
-            VALUES (%s, %s, %s, %s, %s, %s)
+            SELECT %s, %s, %s, %s, %s, %s, %s
+            WHERE EXISTS (
+                SELECT 1
+                FROM match_results
+                WHERE id = %s
+                  AND user_id = %s
+            )
             RETURNING *
             """,
             (
+                user_id,
                 match_result_id,
                 briefing["positioning_statement"],
                 briefing["strengths_to_emphasize"],
                 briefing["gaps_to_prepare"],
                 briefing["likely_interview_topics"],
                 briefing["questions_to_ask"],
+                match_result_id,
+                user_id,
             ),
         )
         return cursor.fetchone()
 
 
-def list_interview_briefings(connection: Connection) -> list[dict]:
+def list_interview_briefings(connection: Connection, user_id: UUID) -> list[dict]:
     with connection.cursor() as cursor:
-        cursor.execute("SELECT * FROM interview_briefings ORDER BY created_at DESC")
+        cursor.execute(
+            """
+            SELECT *
+            FROM interview_briefings
+            WHERE user_id = %s
+            ORDER BY created_at DESC
+            """,
+            (user_id,),
+        )
         return cursor.fetchall()
 
 
