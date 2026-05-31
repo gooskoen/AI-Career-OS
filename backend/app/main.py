@@ -147,13 +147,22 @@ def get_jobs() -> list[dict]:
 @app.post("/jobs/import-text")
 def import_text_job(request: JobImportTextRequest) -> dict:
     def operation(connection):
-        job_row = import_job_from_text(connection, request.raw_text, request.source_url)
+        import_result = import_job_from_text(
+            connection,
+            request.raw_text,
+            request.source_url,
+        )
+        job_row = import_result["job"]
         match_row = _create_optional_match(
             connection,
             job_row,
             request.match_candidate_id,
         )
-        return {"job": job_row, "match": match_row}
+        return {
+            "job": job_row,
+            "duplicate": import_result["duplicate"],
+            "match": match_row,
+        }
 
     return _run_database_operation(operation)
 
@@ -161,13 +170,18 @@ def import_text_job(request: JobImportTextRequest) -> dict:
 @app.post("/jobs/import-url")
 def import_url_job(request: JobImportUrlRequest) -> dict:
     def operation(connection):
-        job_row = import_job_from_url(connection, request.url)
+        import_result = import_job_from_url(connection, request.url)
+        job_row = import_result["job"]
         match_row = _create_optional_match(
             connection,
             job_row,
             request.match_candidate_id,
         )
-        return {"job": job_row, "match": match_row}
+        return {
+            "job": job_row,
+            "duplicate": import_result["duplicate"],
+            "match": match_row,
+        }
 
     return _run_database_operation(operation)
 
