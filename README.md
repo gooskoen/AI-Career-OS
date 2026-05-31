@@ -140,6 +140,27 @@ curl -X POST http://localhost:8000/briefings/persist \
 
 ## Sprint 3 Job Ingestion Usage
 
+### LinkedIn Manual Import
+
+LinkedIn support in Sprint 3 is manual import only. Copy the visible job text from
+LinkedIn and paste it into `POST /jobs/import-text`; optionally include the public
+LinkedIn job URL as `source_url` so the import stores `source = "linkedin"` and an
+`external_id` when one can be extracted from the URL.
+
+```bash
+curl -X POST http://localhost:8000/jobs/import-text \
+  -H "Content-Type: application/json" \
+  -d '{
+    "raw_text": "Senior AI Product Manager\nExampleTech\nBrussels, Belgium (Hybrid)\nAbout the job\nLead AI roadmap delivery, workflow automation, analytics, Python, SQL, and stakeholder management.",
+    "source_url": "https://www.linkedin.com/jobs/view/4242424242/",
+    "match_candidate_id": "<candidate-id>"
+  }'
+```
+
+This endpoint stores the imported job, returns `duplicate: true` when the job already
+exists by `source_url` or by company/title/location, and optionally returns a persisted
+match result when `match_candidate_id` is supplied.
+
 Import a job from raw text:
 
 ```bash
