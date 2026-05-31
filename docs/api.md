@@ -14,8 +14,13 @@ Licensed under the Apache License, Version 2.0.
 - `POST /applications/package`
 - `POST /applications`
 - `GET /applications`
+- `GET /applications/board`
 - `GET /applications/{application_id}`
 - `PATCH /applications/{application_id}/status`
+- `POST /applications/{application_id}/transition`
+- `PATCH /applications/{application_id}/next-action`
+- `GET /applications/{application_id}/readiness`
+- `GET /applications/{application_id}/summary`
 - `GET /applications/{application_id}/status-events`
 - `POST /applications/{application_id}/notes`
 - `POST /intelligence/company`
@@ -70,6 +75,70 @@ history record to `application_status_events`.
 curl http://localhost:8000/applications/<application-id>/status-events
 ```
 
+## Application board
+
+`GET /applications/board` returns applications grouped by pipeline stage:
+
+```bash
+curl "http://localhost:8000/applications/board?page_size=100"
+```
+
+```json
+{
+  "drafted": [],
+  "applied": [],
+  "recruiter_replied": [],
+  "interview_scheduled": [],
+  "interview_completed": [],
+  "offer_received": [],
+  "hired": [],
+  "rejected": [],
+  "withdrawn": []
+}
+```
+
+## Pipeline transitions
+
+```bash
+curl -X POST http://localhost:8000/applications/<application-id>/transition \
+  -H "Content-Type: application/json" \
+  -d '{"status": "interview_scheduled"}'
+```
+
+Transitions update the current application status and write status history. Outcomes
+remain separate business results.
+
+## Next action and follow-up
+
+```bash
+curl -X PATCH http://localhost:8000/applications/<application-id>/next-action \
+  -H "Content-Type: application/json" \
+  -d '{"next_action": "prepare interview", "due_date": "2026-06-10"}'
+```
+
+## Artifact readiness
+
+```bash
+curl http://localhost:8000/applications/<application-id>/readiness
+```
+
+```json
+{
+  "match_ready": true,
+  "package_ready": true,
+  "intelligence_ready": false
+}
+```
+
+## Application summary
+
+```bash
+curl http://localhost:8000/applications/<application-id>/summary
+```
+
+The summary includes the application, current status, next action, latest notes,
+artifact readiness, latest outcome, and status history.
+
 ## Validation errors
 
 Validation errors return a standard error response:
@@ -87,6 +156,6 @@ Validation errors return a standard error response:
 
 ## Guardrails
 
-The API does not implement dashboards, kanban boards, reporting dashboards,
-recruiter CRM, authentication, LLM calls, web browsing, LinkedIn automation, or
-automatic applications in Sprint 9.
+The API does not implement reporting dashboards, recruiter CRM, authentication, LLM
+calls, web browsing, LinkedIn automation, automatic applications, email sending, or a
+dashboard frontend in Sprint 10.
