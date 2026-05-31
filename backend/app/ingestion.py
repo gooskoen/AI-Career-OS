@@ -11,10 +11,10 @@ import re
 import socket
 from html.parser import HTMLParser
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 from urllib.request import Request, urlopen
 
-from app.repositories import create_job
+from app.repositories import create_or_get_imported_job
 from app.schemas import JobDescription
 
 MAX_RESPONSE_BYTES = 1_000_000
@@ -34,6 +34,19 @@ KNOWN_SKILLS = [
     "stakeholder management",
     "workflow automation",
 ]
+LOCATION_HINTS = {
+    "remote",
+    "hybrid",
+    "onsite",
+    "on-site",
+}
+SKILL_SECTION_MARKERS = {
+    "skills",
+    "required skills",
+    "requirements",
+    "qualifications",
+    "what you bring",
+}
 
 
 class IngestionError(ValueError):
@@ -85,14 +98,20 @@ def extract_job_from_text(
     if not description:
         raise IngestionError("Job text is empty after normalization")
 
-    title = _first_meaningful_line(description)
+    source = _source_from_url(source_url)
+    external_id = _external_id_from_url(source_url) if source_url else None
+    title, company, location = _extract_title_company_location(description, source)
+
     return JobDescription(
         title=title,
-        company="Unknown",
+        company=company,
+        location=location,
         description=description,
         required_skills=_extract_known_skills(description),
         nice_to_have_skills=[],
+        source=source,
         source_url=source_url,
+        external_id=external_id,
     )
 
 
@@ -102,14 +121,16 @@ def import_job_from_text(
     source_url: str | None = None,
 ) -> dict:
     job = extract_job_from_text(raw_text, source_url)
-    return create_job(connection, job)
+    job_row, duplicate = create_or_get_imported_job(connection, job)
+    return {"job": job_row, "duplicate": duplicate}
 
 
 def import_job_from_url(connection, url: str) -> dict:
     _validate_public_http_url(url)
     raw_text = _fetch_url_text(url)
     job = extract_job_from_text(raw_text, source_url=url)
-    return create_job(connection, job)
+    job_row, duplicate = create_or_get_imported_job(connection, job)
+    return {"job": job_row, "duplicate": duplicate}
 
 
 def _first_meaningful_line(text: str) -> str:
@@ -119,9 +140,121 @@ def _first_meaningful_line(text: str) -> str:
     return "Untitled job"
 
 
+def _extract_title_company_location(
+    text: str,
+    source: str | None,
+) -> tuple[str, str, str | None]:
+    lines = text.splitlines()
+    title = _first_meaningful_line(text)
+    company = "Unknown"
+    location = None
+
+    if source == "linkedin":
+        title = _value_after_label(lines, {"title", "job title"}) or title
+        company = _value_after_label(lines, {"company", "company name"}) or company
+        location = _value_after_label(lines, {"location", "job location"})
+
+        if company == "Unknown" and len(lines) > 1:
+            company = _clean_linkedin_company_line(lines[1]) or company
+        if location is None and len(lines) > 2:
+            location = _clean_linkedin_location_line(lines[2])
+
+    return title, company, location
+
+
+def _value_after_label(lines: list[str], labels: set[str]) -> str | None:
+    for index, line in enumerate(lines):
+        normalized = line.strip().lower().rstrip(":")
+        if normalized in labels and index + 1 < len(lines):
+            return lines[index + 1].strip()
+
+        for label in labels:
+            prefix = f"{label}:"
+            if normalized.startswith(prefix):
+                return line.split(":", 1)[1].strip()
+    return None
+
+
+def _clean_linkedin_company_line(line: str) -> str | None:
+    cleaned = re.sub(r"\s+\d+(\.\d+)?\s+.*$", "", line).strip()
+    if _looks_like_location(cleaned) or _looks_like_noise(cleaned):
+        return None
+    return cleaned or None
+
+
+def _clean_linkedin_location_line(line: str) -> str | None:
+    cleaned = line.strip()
+    if _looks_like_noise(cleaned):
+        return None
+    if _looks_like_location(cleaned):
+        return cleaned
+    return None
+
+
+def _looks_like_location(line: str) -> bool:
+    lowered = line.lower()
+    return (
+        "," in line
+        or any(hint in lowered for hint in LOCATION_HINTS)
+        or bool(re.search(r"\b[a-z]+,\s*[a-z]{2,}\b", lowered))
+    )
+
+
+def _looks_like_noise(line: str) -> bool:
+    lowered = line.lower()
+    return lowered.startswith(("posted", "applicants", "promoted", "reposted"))
+
+
 def _extract_known_skills(text: str) -> list[str]:
     lowered = text.lower()
-    return sorted({skill for skill in KNOWN_SKILLS if skill in lowered})
+    section_skills = _extract_skills_from_sections(text)
+    known_skills = {skill for skill in KNOWN_SKILLS if skill in lowered}
+    return sorted(section_skills.union(known_skills))
+
+
+def _extract_skills_from_sections(text: str) -> set[str]:
+    lines = text.splitlines()
+    skills: set[str] = set()
+    for index, line in enumerate(lines):
+        marker = line.strip().lower().rstrip(":")
+        if marker not in SKILL_SECTION_MARKERS:
+            continue
+        for skill_line in lines[index + 1 : index + 8]:
+            if not skill_line or skill_line.endswith(":"):
+                break
+            parts = re.split(r"[,;•|]", skill_line)
+            skills.update(
+                part.strip().lower()
+                for part in parts
+                if 2 < len(part.strip()) <= 40
+            )
+    return skills
+
+
+def _source_from_url(source_url: str | None) -> str | None:
+    if source_url and _is_linkedin_url(source_url):
+        return "linkedin"
+    return None
+
+
+def _external_id_from_url(source_url: str | None) -> str | None:
+    if not source_url or not _is_linkedin_url(source_url):
+        return None
+
+    parsed = urlparse(source_url)
+    query = parse_qs(parsed.query)
+    current_job_id = query.get("currentJobId")
+    if current_job_id:
+        return current_job_id[0]
+
+    match = re.search(r"/jobs/view/(\d+)", parsed.path)
+    return match.group(1) if match else None
+
+
+def _is_linkedin_url(url: str) -> bool:
+    hostname = urlparse(url).hostname or ""
+    normalized = hostname.lower()
+    return normalized == "linkedin.com" or normalized.endswith(".linkedin.com")
 
 
 def _fetch_url_text(url: str) -> str:
