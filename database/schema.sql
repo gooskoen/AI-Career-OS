@@ -23,10 +23,14 @@ CREATE TABLE IF NOT EXISTS job_descriptions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     title TEXT NOT NULL,
     company TEXT NOT NULL,
+    location TEXT,
     description TEXT NOT NULL,
     required_skills TEXT[] NOT NULL DEFAULT '{}',
     nice_to_have_skills TEXT[] NOT NULL DEFAULT '{}',
+    source TEXT,
     source_url TEXT,
+    external_id TEXT,
+    imported_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -54,6 +58,12 @@ CREATE TABLE IF NOT EXISTS interview_briefings (
 
 CREATE INDEX IF NOT EXISTS idx_job_descriptions_company
     ON job_descriptions(company);
+
+CREATE INDEX IF NOT EXISTS idx_job_descriptions_source_url
+    ON job_descriptions(source_url);
+
+CREATE INDEX IF NOT EXISTS idx_job_descriptions_identity
+    ON job_descriptions(company, title, location);
 
 CREATE INDEX IF NOT EXISTS idx_match_results_score
     ON match_results(score DESC);
