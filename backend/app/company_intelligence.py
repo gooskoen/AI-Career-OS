@@ -19,8 +19,8 @@ class CompanyIntelligenceRequest(BaseModel):
     candidate: CandidateProfile
     match_result: MatchResult
     application_package: ApplicationPackage
-    company_notes: str | None = None
-    recruiter_notes: str | None = None
+    company_notes: str | None = Field(default=None, max_length=5_000)
+    recruiter_notes: str | None = Field(default=None, max_length=5_000)
 
 
 class CompanyIntelligence(BaseModel):

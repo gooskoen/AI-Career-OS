@@ -25,6 +25,8 @@ or safe public URLs into PostgreSQL.
 - Deterministic company and recruiter intelligence for Sprint 6
 - Deterministic feedback and outcome analytics for Sprint 7
 - First-class Application domain model for Sprint 8
+- Architecture hardening, migrations, router/repository boundaries, standard errors,
+  status events, and application pagination for Sprint 9
 
 ## Persistence Status
 
@@ -42,11 +44,16 @@ simple HTTP GET requests against safe public `http` and `https` URLs.
 
 ## Architecture
 
+See [`docs/architecture.md`](docs/architecture.md) for the Sprint 9 architecture
+notes, router/repository layout, response model direction, and status event model.
+
 ```text
 AI-Career-OS
 +-- backend/
 |   +-- app/
-|   |   +-- main.py        # FastAPI routes
+|   |   +-- main.py        # FastAPI app wiring
+|   |   +-- routers/       # Route groups by domain
+|   |   +-- repositories/  # Data-access functions by aggregate
 |   |   +-- matching.py    # ATS-style keyword matching
 |   |   +-- application_package.py # Template-based application materials
 |   |   +-- company_intelligence.py # Company and recruiter preparation
@@ -55,16 +62,26 @@ AI-Career-OS
 |   |   +-- briefing.py    # Interview briefing generator
 |   |   +-- database.py    # PostgreSQL connection helper
 |   |   +-- ingestion.py   # Job text and URL import helpers
-|   |   +-- repositories.py # Data-access functions
 |   |   +-- schemas.py     # Pydantic request/response models
 |   +-- Dockerfile
 |   +-- requirements.txt
 +-- database/
 |   +-- schema.sql         # PostgreSQL schema
++-- docs/
+|   +-- api.md
+|   +-- architecture.md
+|   +-- migrations.md
++-- migrations/
+|   +-- versions/
 +-- examples/
 |   +-- candidate_profile.example.json
 +-- docker-compose.yml
 ```
+
+Additional docs:
+
+- [`docs/api.md`](docs/api.md)
+- [`docs/migrations.md`](docs/migrations.md)
 
 ## Quick Start
 
@@ -434,9 +451,13 @@ curl -X POST http://localhost:8000/applications \
 List and retrieve applications:
 
 ```bash
-curl http://localhost:8000/applications
+curl "http://localhost:8000/applications?status=drafted&page=1&page_size=25"
 curl http://localhost:8000/applications/<application-id>
 ```
+
+`GET /applications` supports `status`, `candidate_id`, `job_id`, `page`, and
+`page_size`. The response uses a paginated envelope with `success`, `data`, `page`,
+`page_size`, and `total`.
 
 Update application status:
 
@@ -454,9 +475,30 @@ curl -X POST http://localhost:8000/applications/<application-id>/notes \
   -d '{"note": "Prepare a stronger Kubernetes project example before interview."}'
 ```
 
+Fetch application status history:
+
+```bash
+curl http://localhost:8000/applications/<application-id>/status-events
+```
+
 Sprint 8 remains deterministic domain modeling only. It does not add dashboards,
 machine learning, LLM integration, web browsing, LinkedIn automation, or automatic
 applications.
+
+## Sprint 9 Architecture Hardening
+
+Sprint 9 adds Alembic migrations, domain routers, repository modules, standard error
+responses, validation hardening, application status events, and pagination/filtering
+for applications. It does not add dashboards, kanban, reporting, recruiter CRM,
+authentication, LLM integration, web browsing, LinkedIn automation, or automatic
+applications.
+
+Migration commands:
+
+```bash
+alembic heads
+alembic upgrade head
+```
 
 ## Local Backend Development
 

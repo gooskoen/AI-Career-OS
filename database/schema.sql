@@ -88,6 +88,14 @@ CREATE TABLE IF NOT EXISTS application_notes (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS application_status_events (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    application_id UUID NOT NULL REFERENCES applications(id) ON DELETE CASCADE,
+    previous_status TEXT,
+    new_status TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS application_outcomes (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     candidate_id UUID NOT NULL REFERENCES candidate_profiles(id) ON DELETE CASCADE,
@@ -131,6 +139,12 @@ CREATE INDEX IF NOT EXISTS idx_applications_candidate
 
 CREATE INDEX IF NOT EXISTS idx_applications_job
     ON applications(job_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_applications_status
+    ON applications(status, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_application_status_events_application
+    ON application_status_events(application_id, created_at ASC);
 
 CREATE INDEX IF NOT EXISTS idx_application_notes_application
     ON application_notes(application_id, created_at DESC);

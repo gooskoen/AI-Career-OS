@@ -9,28 +9,33 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+SHORT_TEXT = 200
+MEDIUM_TEXT = 2_000
+LONG_TEXT = 20_000
+MAX_LIST_ITEMS = 50
+
 
 class CandidateProfile(BaseModel):
-    name: str = Field(description="Demo candidate name only.")
-    headline: str
-    location: str
-    summary: str
-    target_roles: list[str]
-    skills: list[str]
-    experience_highlights: list[str]
-    portfolio_links: list[str] = Field(default_factory=list)
+    name: str = Field(max_length=SHORT_TEXT, description="Demo candidate name only.")
+    headline: str = Field(max_length=SHORT_TEXT)
+    location: str = Field(max_length=SHORT_TEXT)
+    summary: str = Field(max_length=MEDIUM_TEXT)
+    target_roles: list[str] = Field(max_length=MAX_LIST_ITEMS)
+    skills: list[str] = Field(max_length=MAX_LIST_ITEMS)
+    experience_highlights: list[str] = Field(max_length=MAX_LIST_ITEMS)
+    portfolio_links: list[str] = Field(default_factory=list, max_length=MAX_LIST_ITEMS)
 
 
 class JobDescription(BaseModel):
-    title: str
-    company: str
-    location: str | None = None
-    description: str
-    required_skills: list[str] = Field(default_factory=list)
-    nice_to_have_skills: list[str] = Field(default_factory=list)
-    source: str | None = None
-    source_url: str | None = None
-    external_id: str | None = None
+    title: str = Field(max_length=SHORT_TEXT)
+    company: str = Field(max_length=SHORT_TEXT)
+    location: str | None = Field(default=None, max_length=SHORT_TEXT)
+    description: str = Field(max_length=LONG_TEXT)
+    required_skills: list[str] = Field(default_factory=list, max_length=MAX_LIST_ITEMS)
+    nice_to_have_skills: list[str] = Field(default_factory=list, max_length=MAX_LIST_ITEMS)
+    source: str | None = Field(default=None, max_length=SHORT_TEXT)
+    source_url: str | None = Field(default=None, max_length=MEDIUM_TEXT)
+    external_id: str | None = Field(default=None, max_length=SHORT_TEXT)
 
 
 class MatchRequest(BaseModel):
@@ -53,11 +58,11 @@ class PersistBriefingRequest(BaseModel):
 
 
 class JobImportTextRequest(BaseModel):
-    raw_text: str
-    source_url: str | None = None
+    raw_text: str = Field(min_length=1, max_length=LONG_TEXT)
+    source_url: str | None = Field(default=None, max_length=MEDIUM_TEXT)
     match_candidate_id: UUID | None = None
 
 
 class JobImportUrlRequest(BaseModel):
-    url: str
+    url: str = Field(min_length=1, max_length=MEDIUM_TEXT)
     match_candidate_id: UUID | None = None

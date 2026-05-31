@@ -9,7 +9,7 @@ import re
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 APPLICATION_STATUSES = (
     "drafted",
@@ -40,7 +40,7 @@ class ApplicationCreateRequest(BaseModel):
     candidate_id: UUID
     job_id: UUID
     status: ApplicationStatus = "drafted"
-    source: str | None = None
+    source: str | None = Field(default=None, max_length=200)
     match_result_id: UUID | None = None
     application_package_id: UUID | None = None
     company_intelligence_id: UUID | None = None
@@ -51,7 +51,7 @@ class ApplicationStatusUpdateRequest(BaseModel):
 
 
 class ApplicationNoteRequest(BaseModel):
-    note: str
+    note: str = Field(min_length=1, max_length=5_000)
 
 
 def sanitize_note(note: str) -> str:
