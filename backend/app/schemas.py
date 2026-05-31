@@ -24,10 +24,13 @@ class CandidateProfile(BaseModel):
 class JobDescription(BaseModel):
     title: str
     company: str
+    location: str | None = None
     description: str
     required_skills: list[str] = Field(default_factory=list)
     nice_to_have_skills: list[str] = Field(default_factory=list)
+    source: str | None = None
     source_url: str | None = None
+    external_id: str | None = None
 
 
 class MatchRequest(BaseModel):
