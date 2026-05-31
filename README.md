@@ -20,6 +20,7 @@ or safe public URLs into PostgreSQL.
 - Docker Compose setup for API and database
 - PostgreSQL persistence endpoints for Sprint 2
 - Job ingestion endpoints for Sprint 3
+- Deterministic matching and gap analysis for Sprint 4
 
 ## Persistence Status
 
@@ -198,6 +199,36 @@ URL imports reject non-HTTP schemes, localhost/private network targets, credenti
 URLs, oversized responses, and fetches that exceed the configured timeout. Do not use
 this layer for LinkedIn automation, credential-based scraping, cookies, session tokens,
 or paid scraping APIs.
+
+## Sprint 4 Matching And Gap Analysis
+
+Sprint 4 keeps matching deterministic. The `POST /match` endpoint returns an overall
+score, a score breakdown, strengths, gaps, and recommended actions.
+
+```bash
+curl -X POST http://localhost:8000/match \
+  -H "Content-Type: application/json" \
+  -d '{
+    "candidate": {
+      "name": "Alex Demo",
+      "headline": "Automation specialist",
+      "location": "Remote",
+      "summary": "Builds analytics and workflow automation systems.",
+      "target_roles": ["AI Product Operations Lead"],
+      "skills": ["Python", "SQL", "workflow automation", "analytics"],
+      "experience_highlights": ["Delivered Python and SQL analytics for operations teams."]
+    },
+    "job": {
+      "title": "AI Product Operations Lead",
+      "company": "ExampleTech",
+      "description": "Lead Python, SQL, workflow automation, Kubernetes, and GraphQL work.",
+      "required_skills": ["Python", "SQL", "Kubernetes"],
+      "nice_to_have_skills": ["GraphQL", "workflow automation"]
+    }
+  }'
+```
+
+No paid APIs, scraping, LinkedIn automation, or application sending are part of Sprint 4.
 
 ## Local Backend Development
 
