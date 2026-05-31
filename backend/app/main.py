@@ -8,6 +8,7 @@ from __future__ import annotations
 from fastapi import FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
 
+from app.auth import require_auth_secret
 from app.errors import (
     http_exception_handler,
     internal_exception_handler,
@@ -22,6 +23,8 @@ from app.routers import (
     matching,
     outcomes,
 )
+
+require_auth_secret()
 
 app = FastAPI(
     title="AI-Career-OS API",

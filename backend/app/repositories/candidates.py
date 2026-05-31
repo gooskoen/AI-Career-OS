@@ -17,6 +17,7 @@ def create_candidate(
     candidate: CandidateProfile,
     user_id: UUID,
 ) -> dict:
+    _require_user_id(user_id)
     with connection.cursor() as cursor:
         cursor.execute(
             """
@@ -50,6 +51,7 @@ def create_candidate(
 
 
 def list_candidates(connection: Connection, user_id: UUID) -> list[dict]:
+    _require_user_id(user_id)
     with connection.cursor() as cursor:
         cursor.execute(
             """
@@ -66,24 +68,19 @@ def list_candidates(connection: Connection, user_id: UUID) -> list[dict]:
 def get_candidate(
     connection: Connection,
     candidate_id: UUID,
-    user_id: UUID | None = None,
+    user_id: UUID,
 ) -> dict | None:
+    _require_user_id(user_id)
     with connection.cursor() as cursor:
-        if user_id is None:
-            cursor.execute(
-                "SELECT * FROM candidate_profiles WHERE id = %s",
-                (candidate_id,),
-            )
-        else:
-            cursor.execute(
-                """
-                SELECT *
-                FROM candidate_profiles
-                WHERE id = %s
-                  AND user_id = %s
-                """,
-                (candidate_id, user_id),
-            )
+        cursor.execute(
+            """
+            SELECT *
+            FROM candidate_profiles
+            WHERE id = %s
+              AND user_id = %s
+            """,
+            (candidate_id, user_id),
+        )
         return cursor.fetchone()
 
 
@@ -98,3 +95,8 @@ def candidate_from_row(row: dict) -> CandidateProfile:
         experience_highlights=row["experience_highlights"],
         portfolio_links=row["portfolio_links"],
     )
+
+
+def _require_user_id(user_id: UUID) -> None:
+    if user_id is None:
+        raise ValueError("user_id is required for candidate repository access")

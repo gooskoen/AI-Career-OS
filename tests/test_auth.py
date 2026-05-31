@@ -5,22 +5,35 @@
 
 from __future__ import annotations
 
+import base64
+import hashlib
+import hmac
 import importlib.util
+import json
 from pathlib import Path
 from uuid import uuid4
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.auth import (
+    auth_secret,
     create_access_token,
     create_refresh_token,
     decode_access_token,
     hash_password,
     verify_password,
 )
+from app.application_domain import ApplicationNoteRequest
 from app.dependencies import current_user
+from app.errors import _code_for_status
+from app.feedback import OutcomeRequest
 from app.main import app
-from app.repositories.matching import list_match_results
+from app.matching import MatchResult
+from app.repositories.applications import create_application_note, get_application
+from app.repositories.candidates import get_candidate
+from app.repositories.matching import create_match_result, list_match_results
+from app.repositories.outcomes import create_application_outcome, list_application_outcomes
 
 
 def test_auth_migration_exists_and_adds_ownership() -> None:
@@ -49,6 +62,36 @@ def test_password_hashing_and_jwt_validation_are_deterministic() -> None:
     assert verify_password("wrong-password", password_hash) is False
     assert decode_access_token(token) == user_id
     assert decode_access_token(token + "tampered") is None
+
+
+def test_missing_auth_secret_fails_outside_test_mode(monkeypatch) -> None:
+    monkeypatch.delenv("AUTH_SECRET", raising=False)
+
+    with pytest.raises(RuntimeError, match="AUTH_SECRET must be configured"):
+        auth_secret()
+
+
+def test_malformed_jwt_tokens_return_normalized_401() -> None:
+    client = TestClient(app)
+    tokens = [
+        _signed_token("a"),
+        _signed_token(_base64url(b"\xff")),
+        _signed_token(_base64url(b"not-json")),
+    ]
+
+    for token in tokens:
+        response = client.get(
+            "/applications",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+        assert response.status_code == 401
+        assert response.json()["error"]["code"] == "authentication_error"
+
+
+def test_error_codes_distinguish_authentication_and_authorization() -> None:
+    assert _code_for_status(401) == "authentication_error"
+    assert _code_for_status(403) == "authorization_error"
 
 
 def test_register_endpoint_returns_tokens_without_password_hash(monkeypatch) -> None:
@@ -162,6 +205,17 @@ def test_persisted_match_listing_is_scoped_by_user() -> None:
     assert connection.cursor_obj.last_params == (user_id,)
 
 
+def test_cross_user_candidate_access_returns_none() -> None:
+    user_id = uuid4()
+    candidate_id = uuid4()
+    connection = FakeConnection([None])
+
+    assert get_candidate(connection, candidate_id, user_id) is None
+    assert "WHERE id = %s" in connection.cursor_obj.last_query
+    assert "AND user_id = %s" in connection.cursor_obj.last_query
+    assert connection.cursor_obj.last_params == (candidate_id, user_id)
+
+
 def test_cross_user_application_access_returns_not_found(monkeypatch) -> None:
     user_id = uuid4()
     application_id = uuid4()
@@ -194,6 +248,111 @@ def test_cross_user_application_access_returns_not_found(monkeypatch) -> None:
     assert response.json()["error"]["code"] == "not_found"
 
 
+def test_cross_user_application_note_creation_returns_none() -> None:
+    user_id = uuid4()
+    application_id = uuid4()
+    connection = FakeConnection([None])
+
+    row = create_application_note(
+        connection,
+        application_id,
+        ApplicationNoteRequest(note="Prepare interview examples."),
+        user_id,
+    )
+
+    assert row is None
+    assert "WHERE EXISTS" in connection.cursor_obj.last_query
+    assert "AND user_id = %s" in connection.cursor_obj.last_query
+    assert connection.cursor_obj.last_params[-1] == user_id
+
+
+def test_cross_user_outcome_creation_returns_none() -> None:
+    user_id = uuid4()
+    application_id = uuid4()
+    connection = FakeConnection([None])
+
+    row = create_application_outcome(
+        connection,
+        OutcomeRequest(
+            candidate_id=uuid4(),
+            job_id=uuid4(),
+            application_id=application_id,
+            outcome="applied",
+            notes="Applied.",
+        ),
+        user_id,
+    )
+
+    assert row is None
+    assert "WHERE EXISTS" in connection.cursor_obj.last_query
+    assert "AND user_id = %s" in connection.cursor_obj.last_query
+    assert connection.cursor_obj.last_params[-1] == user_id
+
+
+def test_cross_user_outcome_history_returns_empty() -> None:
+    user_id = uuid4()
+    candidate_id = uuid4()
+    connection = FakeConnection([])
+
+    assert list_application_outcomes(connection, candidate_id, user_id) == []
+    assert "AND user_id = %s" in connection.cursor_obj.last_query
+    assert connection.cursor_obj.last_params == (candidate_id, user_id)
+
+
+def test_cannot_create_match_result_for_other_users_candidate() -> None:
+    user_id = uuid4()
+    candidate_id = uuid4()
+    connection = FakeConnection([None])
+
+    row = create_match_result(
+        connection,
+        candidate_id,
+        uuid4(),
+        MatchResult(
+            score=80,
+            matched_keywords=["python"],
+            missing_keywords=[],
+            candidate_highlights=[],
+            recommendation="Proceed.",
+        ),
+        user_id,
+    )
+
+    assert row is None
+    assert "FROM candidate_profiles" in connection.cursor_obj.last_query
+    assert "AND user_id = %s" in connection.cursor_obj.last_query
+    assert connection.cursor_obj.last_params[-2:] == (candidate_id, user_id)
+
+
+def test_private_repositories_reject_missing_user_id() -> None:
+    connection = FakeConnection([])
+
+    with pytest.raises(ValueError):
+        get_candidate(connection, uuid4(), None)
+
+    with pytest.raises(ValueError):
+        get_application(connection, uuid4(), None)
+
+    with pytest.raises(ValueError):
+        list_match_results(connection, None)
+
+    with pytest.raises(ValueError):
+        list_application_outcomes(connection, uuid4(), None)
+
+
+def _signed_token(payload_segment: str) -> str:
+    header_segment = _base64url(json.dumps({"alg": "HS256", "typ": "JWT"}).encode())
+    signing_input = f"{header_segment}.{payload_segment}".encode("utf-8")
+    signature = base64.urlsafe_b64encode(
+        hmac.new(auth_secret(), signing_input, hashlib.sha256).digest()
+    ).rstrip(b"=").decode("ascii")
+    return f"{header_segment}.{payload_segment}.{signature}"
+
+
+def _base64url(value: bytes) -> str:
+    return base64.urlsafe_b64encode(value).rstrip(b"=").decode("ascii")
+
+
 class FakeConnection:
     def __init__(self, results):
         self.cursor_obj = FakeCursor(results)
@@ -220,3 +379,8 @@ class FakeCursor:
 
     def fetchall(self):
         return self.results
+
+    def fetchone(self):
+        if not self.results:
+            return None
+        return self.results.pop(0)

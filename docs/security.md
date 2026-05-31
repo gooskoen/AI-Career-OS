@@ -32,7 +32,8 @@ scoped through the owning candidate and application.
 - Plain text passwords are never returned by the API.
 - Access tokens are short-lived JWTs.
 - Refresh tokens are stored as SHA-256 hashes.
-- `AUTH_SECRET` should be configured outside source control for any real deployment.
+- `AUTH_SECRET` is required at API startup and should be configured outside source
+  control.
 
 ## Authorization Behavior
 

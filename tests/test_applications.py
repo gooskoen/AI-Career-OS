@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from uuid import uuid4
 
+import pytest
+
 from app.application_domain import (
     ApplicationCreateRequest,
     ApplicationNoteRequest,
@@ -67,6 +69,7 @@ def test_application_creation() -> None:
 
 def test_application_retrieval() -> None:
     application_id = uuid4()
+    user_id = uuid4()
     connection = FakeConnection(
         [
             {"id": application_id, "status": "applied"},
@@ -75,17 +78,19 @@ def test_application_retrieval() -> None:
         ]
     )
 
-    row = get_application(connection, application_id)
-    rows, total = list_applications(connection)
+    row = get_application(connection, application_id, user_id)
+    rows, total = list_applications(connection, user_id=user_id)
 
     assert row["id"] == application_id
     assert total == 1
     assert rows == [{"id": application_id, "status": "applied"}]
     assert "ORDER BY created_at DESC" in connection.cursor_obj.last_query
+    assert connection.cursor_obj.params[0] == (application_id, user_id)
 
 
 def test_status_updates() -> None:
     application_id = uuid4()
+    user_id = uuid4()
     connection = FakeConnection(
         [
             {"status": "applied"},
@@ -97,6 +102,7 @@ def test_status_updates() -> None:
         connection,
         application_id,
         ApplicationStatusUpdateRequest(status="interview_scheduled"),
+        user_id,
     )
 
     assert row["status"] == "interview_scheduled"
@@ -104,8 +110,7 @@ def test_status_updates() -> None:
     assert connection.cursor_obj.params[1] == (
         "interview_scheduled",
         application_id,
-        None,
-        None,
+        user_id,
     )
     assert "INSERT INTO application_status_events" in connection.cursor_obj.queries[2]
     assert connection.cursor_obj.params[2] == (
@@ -122,6 +127,7 @@ def test_status_update_missing_application_returns_none() -> None:
         connection,
         uuid4(),
         ApplicationStatusUpdateRequest(status="interview_scheduled"),
+        uuid4(),
     )
 
     assert row is None
@@ -130,6 +136,7 @@ def test_status_update_missing_application_returns_none() -> None:
 
 def test_application_status_event_history() -> None:
     application_id = uuid4()
+    user_id = uuid4()
     connection = FakeConnection(
         [
             [
@@ -142,10 +149,33 @@ def test_application_status_event_history() -> None:
         ]
     )
 
-    rows = list_application_status_events(connection, application_id)
+    rows = list_application_status_events(connection, application_id, user_id)
 
     assert rows[0]["new_status"] == "applied"
     assert "application_status_events" in connection.cursor_obj.last_query
+    assert connection.cursor_obj.last_params == (application_id, user_id)
+
+
+def test_private_application_repositories_require_user_id() -> None:
+    connection = FakeConnection([])
+    application_id = uuid4()
+
+    with pytest.raises(ValueError):
+        get_application(connection, application_id, None)
+
+    with pytest.raises(ValueError):
+        list_applications(connection, user_id=None)
+
+    with pytest.raises(ValueError):
+        update_application_status(
+            connection,
+            application_id,
+            ApplicationStatusUpdateRequest(status="applied"),
+            None,
+        )
+
+    with pytest.raises(ValueError):
+        list_application_status_events(connection, application_id, None)
 
 
 def test_application_board_groups_by_pipeline_stage() -> None:

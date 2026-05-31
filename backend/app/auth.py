@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import base64
+import binascii
 import hashlib
 import hmac
 import json
@@ -105,7 +106,11 @@ def auth_secret() -> bytes:
     configured = os.getenv("AUTH_SECRET")
     if configured:
         return configured.encode("utf-8")
-    return b"ai-career-os-demo-auth-secret"
+    raise RuntimeError("AUTH_SECRET must be configured")
+
+
+def require_auth_secret() -> None:
+    auth_secret()
 
 
 def _encode_jwt(payload: dict) -> str:
@@ -130,7 +135,13 @@ def _decode_jwt(token: str) -> dict | None:
         if int(payload.get("exp", 0)) < int(datetime.now(timezone.utc).timestamp()):
             return None
         return payload
-    except (ValueError, json.JSONDecodeError, TypeError):
+    except (
+        binascii.Error,
+        json.JSONDecodeError,
+        TypeError,
+        UnicodeDecodeError,
+        ValueError,
+    ):
         return None
 
 

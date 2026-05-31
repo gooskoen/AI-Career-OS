@@ -19,6 +19,7 @@ def create_match_result(
     match: MatchResult,
     user_id: UUID,
 ) -> dict:
+    _require_user_id(user_id)
     with connection.cursor() as cursor:
         cursor.execute(
             """
@@ -31,7 +32,13 @@ def create_match_result(
                 missing_keywords,
                 recommendation
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            SELECT %s, %s, %s, %s, %s, %s, %s
+            WHERE EXISTS (
+                SELECT 1
+                FROM candidate_profiles
+                WHERE id = %s
+                  AND user_id = %s
+            )
             RETURNING *
             """,
             (
@@ -42,12 +49,15 @@ def create_match_result(
                 match.matched_keywords,
                 match.missing_keywords,
                 match.recommendation,
+                candidate_id,
+                user_id,
             ),
         )
         return cursor.fetchone()
 
 
 def list_match_results(connection: Connection, user_id: UUID) -> list[dict]:
+    _require_user_id(user_id)
     with connection.cursor() as cursor:
         cursor.execute(
             """
@@ -66,6 +76,7 @@ def get_match_result(
     match_result_id: UUID,
     user_id: UUID,
 ) -> dict | None:
+    _require_user_id(user_id)
     with connection.cursor() as cursor:
         cursor.execute(
             """
@@ -85,6 +96,7 @@ def create_interview_briefing(
     briefing: dict,
     user_id: UUID,
 ) -> dict:
+    _require_user_id(user_id)
     with connection.cursor() as cursor:
         cursor.execute(
             """
@@ -122,6 +134,7 @@ def create_interview_briefing(
 
 
 def list_interview_briefings(connection: Connection, user_id: UUID) -> list[dict]:
+    _require_user_id(user_id)
     with connection.cursor() as cursor:
         cursor.execute(
             """
@@ -143,3 +156,8 @@ def match_from_row(row: dict) -> MatchResult:
         candidate_highlights=[],
         recommendation=row["recommendation"],
     )
+
+
+def _require_user_id(user_id: UUID) -> None:
+    if user_id is None:
+        raise ValueError("user_id is required for matching repository access")

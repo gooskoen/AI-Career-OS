@@ -74,7 +74,8 @@ expired.
 - Access tokens are signed JWTs using `HS256`.
 - Refresh tokens are random opaque tokens.
 - Only refresh token hashes are stored in PostgreSQL.
-- Set `AUTH_SECRET` in non-demo environments.
+- `AUTH_SECRET` is required at API startup and must be configured outside source
+  control.
 
 ## Ownership Rules
 

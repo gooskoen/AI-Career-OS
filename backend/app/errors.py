@@ -65,6 +65,10 @@ async def internal_exception_handler(request: Request, exc: Exception) -> JSONRe
 def _code_for_status(status_code: int) -> str:
     if status_code == 400:
         return "bad_request"
+    if status_code == 401:
+        return "authentication_error"
+    if status_code == 403:
+        return "authorization_error"
     if status_code == 404:
         return "not_found"
     if status_code == 409:

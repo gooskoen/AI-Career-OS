@@ -17,6 +17,7 @@ def create_application_outcome(
     outcome: OutcomeRequest,
     user_id: UUID,
 ) -> dict:
+    _require_user_id(user_id)
     with connection.cursor() as cursor:
         cursor.execute(
             """
@@ -39,6 +40,8 @@ def create_application_outcome(
                 FROM applications
                 WHERE id = %s
                   AND user_id = %s
+                  AND candidate_id = %s
+                  AND job_id = %s
             )
             RETURNING *
             """,
@@ -56,6 +59,8 @@ def create_application_outcome(
                 outcome.job_family,
                 outcome.application_id,
                 user_id,
+                outcome.candidate_id,
+                outcome.job_id,
             ),
         )
         return cursor.fetchone()
@@ -66,6 +71,7 @@ def list_application_outcomes(
     candidate_id: UUID,
     user_id: UUID,
 ) -> list[dict]:
+    _require_user_id(user_id)
     with connection.cursor() as cursor:
         cursor.execute(
             """
@@ -78,3 +84,8 @@ def list_application_outcomes(
             (candidate_id, user_id),
         )
         return cursor.fetchall()
+
+
+def _require_user_id(user_id: UUID) -> None:
+    if user_id is None:
+        raise ValueError("user_id is required for outcome repository access")

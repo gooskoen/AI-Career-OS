@@ -147,6 +147,9 @@ authentication. Register or log in first, then send:
 Authorization: Bearer <access-token>
 ```
 
+Set `AUTH_SECRET` before starting the API. The app fails startup when the secret is
+missing.
+
 ## Sprint 2 Persistence Usage
 
 Start the stack with PostgreSQL:
