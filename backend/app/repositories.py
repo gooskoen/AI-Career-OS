@@ -9,6 +9,7 @@ from uuid import UUID
 
 from psycopg import Connection
 
+from app.feedback import OutcomeRequest, sanitize_notes
 from app.matching import MatchResult
 from app.schemas import CandidateProfile, JobDescription
 
@@ -221,6 +222,61 @@ def create_interview_briefing(
 def list_interview_briefings(connection: Connection) -> list[dict]:
     with connection.cursor() as cursor:
         cursor.execute("SELECT * FROM interview_briefings ORDER BY created_at DESC")
+        return cursor.fetchall()
+
+
+def create_application_outcome(
+    connection: Connection,
+    outcome: OutcomeRequest,
+) -> dict:
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            INSERT INTO application_outcomes (
+                candidate_id,
+                job_id,
+                application_id,
+                outcome,
+                notes,
+                cv_edits_applied,
+                cover_letter_used,
+                interview_prep_used,
+                skills,
+                job_family
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            RETURNING *
+            """,
+            (
+                outcome.candidate_id,
+                outcome.job_id,
+                outcome.application_id,
+                outcome.outcome,
+                sanitize_notes(outcome.notes),
+                outcome.cv_edits_applied,
+                outcome.cover_letter_used,
+                outcome.interview_prep_used,
+                outcome.skills,
+                outcome.job_family,
+            ),
+        )
+        return cursor.fetchone()
+
+
+def list_application_outcomes(
+    connection: Connection,
+    candidate_id: UUID,
+) -> list[dict]:
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT *
+            FROM application_outcomes
+            WHERE candidate_id = %s
+            ORDER BY created_at ASC
+            """,
+            (candidate_id,),
+        )
         return cursor.fetchall()
 
 

@@ -23,6 +23,7 @@ or safe public URLs into PostgreSQL.
 - Deterministic matching and gap analysis for Sprint 4
 - Deterministic application package generation for Sprint 5
 - Deterministic company and recruiter intelligence for Sprint 6
+- Deterministic feedback and outcome analytics for Sprint 7
 
 ## Persistence Status
 
@@ -48,6 +49,7 @@ AI-Career-OS
 |   |   +-- matching.py    # ATS-style keyword matching
 |   |   +-- application_package.py # Template-based application materials
 |   |   +-- company_intelligence.py # Company and recruiter preparation
+|   |   +-- feedback.py    # Outcome analytics and candidate insights
 |   |   +-- briefing.py    # Interview briefing generator
 |   |   +-- database.py    # PostgreSQL connection helper
 |   |   +-- ingestion.py   # Job text and URL import helpers
@@ -91,6 +93,9 @@ Useful endpoints:
 - `POST /briefing`
 - `POST /applications/package`
 - `POST /intelligence/company`
+- `POST /outcomes`
+- `GET /outcomes/{candidate_id}`
+- `GET /insights/candidate/{candidate_id}`
 - `POST /candidates`
 - `GET /candidates`
 - `POST /jobs`
@@ -340,6 +345,48 @@ curl -X POST http://localhost:8000/intelligence/company \
 The response includes `company_summary`, `likely_business_needs`,
 `interview_focus_areas`, `questions_to_ask`, `recruiter_message_draft`,
 `salary_positioning_notes`, `risk_flags`, and `next_best_actions`.
+
+## Sprint 7 Feedback Learning Loop Usage
+
+Sprint 7 captures application outcomes and computes deterministic conversion metrics
+and candidate insights. It does not use machine learning, LLMs, web browsing, LinkedIn
+automation, or automatic applications.
+
+Create an outcome:
+
+```bash
+curl -X POST http://localhost:8000/outcomes \
+  -H "Content-Type: application/json" \
+  -d '{
+    "candidate_id": "<candidate-id>",
+    "job_id": "<job-id>",
+    "application_id": "<application-id>",
+    "outcome": "recruiter_replied",
+    "notes": "Recruiter replied after tailored CV update.",
+    "cv_edits_applied": true,
+    "cover_letter_used": true,
+    "interview_prep_used": false,
+    "skills": ["Python", "workflow automation"],
+    "job_family": "AI Operations"
+  }'
+```
+
+Fetch outcome history and conversion metrics:
+
+```bash
+curl http://localhost:8000/outcomes/<candidate-id>
+```
+
+Fetch deterministic candidate insights:
+
+```bash
+curl http://localhost:8000/insights/candidate/<candidate-id>
+```
+
+Supported outcomes are `applied`, `recruiter_replied`, `interview_scheduled`,
+`interview_completed`, `rejected`, `offer_received`, `hired`, and `withdrawn`.
+The analytics include application-to-reply, reply-to-interview, interview-to-offer,
+and offer-to-hire rates.
 
 ## Local Backend Development
 

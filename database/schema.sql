@@ -56,6 +56,32 @@ CREATE TABLE IF NOT EXISTS interview_briefings (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS application_outcomes (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    candidate_id UUID NOT NULL REFERENCES candidate_profiles(id) ON DELETE CASCADE,
+    job_id UUID NOT NULL REFERENCES job_descriptions(id) ON DELETE CASCADE,
+    application_id UUID NOT NULL,
+    outcome TEXT NOT NULL CHECK (
+        outcome IN (
+            'applied',
+            'recruiter_replied',
+            'interview_scheduled',
+            'interview_completed',
+            'rejected',
+            'offer_received',
+            'hired',
+            'withdrawn'
+        )
+    ),
+    notes TEXT NOT NULL DEFAULT '',
+    cv_edits_applied BOOLEAN NOT NULL DEFAULT false,
+    cover_letter_used BOOLEAN NOT NULL DEFAULT false,
+    interview_prep_used BOOLEAN NOT NULL DEFAULT false,
+    skills TEXT[] NOT NULL DEFAULT '{}',
+    job_family TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE INDEX IF NOT EXISTS idx_job_descriptions_company
     ON job_descriptions(company);
 
@@ -67,3 +93,9 @@ CREATE INDEX IF NOT EXISTS idx_job_descriptions_identity
 
 CREATE INDEX IF NOT EXISTS idx_match_results_score
     ON match_results(score DESC);
+
+CREATE INDEX IF NOT EXISTS idx_application_outcomes_candidate
+    ON application_outcomes(candidate_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_application_outcomes_application
+    ON application_outcomes(application_id, created_at DESC);

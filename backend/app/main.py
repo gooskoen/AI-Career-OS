@@ -9,6 +9,7 @@ import json
 import os
 from pathlib import Path
 from typing import Callable, TypeVar
+from uuid import UUID
 
 from fastapi import FastAPI, HTTPException
 from psycopg import Error as PsycopgError
@@ -23,6 +24,11 @@ from app.company_intelligence import (
     build_company_intelligence,
 )
 from app.database import get_connection
+from app.feedback import (
+    OutcomeRequest,
+    build_candidate_insights,
+    build_outcome_history,
+)
 from app.ingestion import (
     IngestionError,
     UrlFetchError,
@@ -33,6 +39,7 @@ from app.matching import score_job_match
 from app.repositories import (
     candidate_from_row,
     create_candidate,
+    create_application_outcome,
     create_interview_briefing,
     create_job,
     create_match_result,
@@ -41,6 +48,7 @@ from app.repositories import (
     get_match_result,
     job_from_row,
     list_candidates,
+    list_application_outcomes,
     list_interview_briefings,
     list_jobs,
     list_match_results,
@@ -276,6 +284,31 @@ def persist_briefing(request: PersistBriefingRequest) -> dict:
 @app.get("/briefings")
 def get_briefings() -> list[dict]:
     return _run_database_operation(list_interview_briefings)
+
+
+@app.post("/outcomes")
+def create_outcome(outcome: OutcomeRequest) -> dict:
+    return _run_database_operation(
+        lambda connection: create_application_outcome(connection, outcome)
+    )
+
+
+@app.get("/outcomes/{candidate_id}")
+def get_outcomes(candidate_id: UUID) -> dict:
+    return _run_database_operation(
+        lambda connection: build_outcome_history(
+            list_application_outcomes(connection, candidate_id)
+        )
+    )
+
+
+@app.get("/insights/candidate/{candidate_id}")
+def get_candidate_insights(candidate_id: UUID) -> dict:
+    return _run_database_operation(
+        lambda connection: build_candidate_insights(
+            list_application_outcomes(connection, candidate_id)
+        )
+    )
 
 
 def _run_database_operation(operation: Callable[..., T]) -> T:
