@@ -22,6 +22,7 @@ or safe public URLs into PostgreSQL.
 - Job ingestion endpoints for Sprint 3
 - Deterministic matching and gap analysis for Sprint 4
 - Deterministic application package generation for Sprint 5
+- Deterministic company and recruiter intelligence for Sprint 6
 
 ## Persistence Status
 
@@ -46,6 +47,7 @@ AI-Career-OS
 |   |   +-- main.py        # FastAPI routes
 |   |   +-- matching.py    # ATS-style keyword matching
 |   |   +-- application_package.py # Template-based application materials
+|   |   +-- company_intelligence.py # Company and recruiter preparation
 |   |   +-- briefing.py    # Interview briefing generator
 |   |   +-- database.py    # PostgreSQL connection helper
 |   |   +-- ingestion.py   # Job text and URL import helpers
@@ -88,6 +90,7 @@ Useful endpoints:
 - `POST /match`
 - `POST /briefing`
 - `POST /applications/package`
+- `POST /intelligence/company`
 - `POST /candidates`
 - `GET /candidates`
 - `POST /jobs`
@@ -279,6 +282,64 @@ curl -X POST http://localhost:8000/applications/package \
 
 The response includes `tailored_summary`, `cover_letter`, `talking_points`,
 `key_strengths`, `risk_gaps`, and `recommended_cv_edits`.
+
+## Sprint 6 Company Intelligence Usage
+
+Sprint 6 generates deterministic company and recruiter preparation from the job,
+candidate, match result, application package, and optional notes supplied by the user.
+It does not browse the web, call paid APIs, scrape sites, automate LinkedIn, send email,
+or contact recruiters.
+
+```bash
+curl -X POST http://localhost:8000/intelligence/company \
+  -H "Content-Type: application/json" \
+  -d '{
+    "job": {
+      "title": "AI Product Operations Lead",
+      "company": "ExampleTech",
+      "description": "Lead Python, SQL, workflow automation, and Kubernetes delivery for internal teams.",
+      "required_skills": ["Python", "SQL", "Kubernetes"],
+      "nice_to_have_skills": ["GraphQL", "workflow automation"]
+    },
+    "candidate": {
+      "name": "Alex Demo",
+      "headline": "Automation specialist",
+      "location": "Remote",
+      "summary": "Builds analytics and workflow automation systems with 6 years of experience.",
+      "target_roles": ["AI Product Operations Lead"],
+      "skills": ["Python", "SQL", "Kubernetes", "workflow automation"],
+      "experience_highlights": ["Delivered Python analytics for operations teams."]
+    },
+    "match_result": {
+      "score": 82,
+      "score_breakdown": {"overall": 82, "keyword": 70, "required": 100, "nice_to_have": 50},
+      "matched_keywords": ["python", "sql"],
+      "missing_keywords": ["graphql"],
+      "matched_skills": ["Python", "SQL", "Kubernetes"],
+      "missing_skills": ["GraphQL"],
+      "strengths": [{"skill": "Python", "contribution": 60, "reason": "Matches a required skill.", "evidence": ["Delivered Python analytics for operations teams."]}],
+      "gaps": {"critical": [], "moderate": [], "optional": ["GraphQL"]},
+      "recommended_actions": ["Add a concise side project or learning note for GraphQL."],
+      "explanation": null,
+      "candidate_highlights": ["Delivered Python analytics for operations teams."],
+      "recommendation": "Strong match: tailor the application around the shared keywords."
+    },
+    "application_package": {
+      "tailored_summary": "Alex Demo is positioned for the role through Python.",
+      "cover_letter": "Dear ExampleTech hiring team, I am interested in the role.",
+      "talking_points": ["Connect prior work to Python."],
+      "key_strengths": ["Python", "SQL"],
+      "risk_gaps": ["GraphQL"],
+      "recommended_cv_edits": ["Add a CV bullet with measurable evidence for Python."]
+    },
+    "company_notes": "Manual note: internal automation team.",
+    "recruiter_notes": "Manual note: recruiter prefers concise context."
+  }'
+```
+
+The response includes `company_summary`, `likely_business_needs`,
+`interview_focus_areas`, `questions_to_ask`, `recruiter_message_draft`,
+`salary_positioning_notes`, `risk_flags`, and `next_best_actions`.
 
 ## Local Backend Development
 

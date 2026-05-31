@@ -18,6 +18,10 @@ from app.application_package import (
     build_application_package,
 )
 from app.briefing import build_interview_briefing
+from app.company_intelligence import (
+    CompanyIntelligenceRequest,
+    build_company_intelligence,
+)
 from app.database import get_connection
 from app.ingestion import (
     IngestionError,
@@ -111,6 +115,19 @@ def application_package(request: ApplicationPackageRequest) -> dict:
         request.match_result,
     )
     return package.model_dump()
+
+
+@app.post("/intelligence/company")
+def company_intelligence(request: CompanyIntelligenceRequest) -> dict:
+    intelligence = build_company_intelligence(
+        request.job,
+        request.candidate,
+        request.match_result,
+        request.application_package,
+        request.company_notes,
+        request.recruiter_notes,
+    )
+    return intelligence.model_dump()
 
 
 @app.get("/demo/match")
