@@ -27,3 +27,6 @@ jobs:
 
       - name: Compile backend
         run: python -m compileall backend/app
+
+      - name: Run tests
+        run: pytest
