@@ -4,11 +4,17 @@
 # you may not use this file except in compliance with the License.
 
 from app.repositories.applications import (
+    application_artifact_readiness,
+    application_board,
+    application_summary,
     create_application,
     create_application_note,
     get_application,
+    latest_application_notes,
+    latest_application_outcome,
     list_application_status_events,
     list_applications,
+    update_application_next_action,
     update_application_status,
 )
 from app.repositories.candidates import (
@@ -40,6 +46,9 @@ from app.repositories.outcomes import (
 
 __all__ = [
     "candidate_from_row",
+    "application_artifact_readiness",
+    "application_board",
+    "application_summary",
     "create_application",
     "create_application_note",
     "create_application_outcome",
@@ -54,6 +63,8 @@ __all__ = [
     "get_job",
     "get_match_result",
     "job_from_row",
+    "latest_application_notes",
+    "latest_application_outcome",
     "list_application_outcomes",
     "list_application_status_events",
     "list_applications",
@@ -62,5 +73,6 @@ __all__ = [
     "list_jobs",
     "list_match_results",
     "match_from_row",
+    "update_application_next_action",
     "update_application_status",
 ]

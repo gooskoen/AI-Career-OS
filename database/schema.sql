@@ -77,6 +77,8 @@ CREATE TABLE IF NOT EXISTS applications (
     match_result_id UUID REFERENCES match_results(id) ON DELETE SET NULL,
     application_package_id UUID,
     company_intelligence_id UUID,
+    next_action TEXT,
+    next_action_due DATE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -142,6 +144,9 @@ CREATE INDEX IF NOT EXISTS idx_applications_job
 
 CREATE INDEX IF NOT EXISTS idx_applications_status
     ON applications(status, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_applications_next_action_due
+    ON applications(next_action_due, status);
 
 CREATE INDEX IF NOT EXISTS idx_application_status_events_application
     ON application_status_events(application_id, created_at ASC);

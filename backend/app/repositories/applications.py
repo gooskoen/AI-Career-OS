@@ -12,7 +12,9 @@ from psycopg import Connection
 from app.application_domain import (
     ApplicationCreateRequest,
     ApplicationNoteRequest,
+    ApplicationNextActionRequest,
     ApplicationStatusUpdateRequest,
+    APPLICATION_STATUSES,
     sanitize_note,
 )
 
@@ -31,9 +33,11 @@ def create_application(
                 source,
                 match_result_id,
                 application_package_id,
-                company_intelligence_id
+                company_intelligence_id,
+                next_action,
+                next_action_due
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING *
             """,
             (
@@ -44,6 +48,8 @@ def create_application(
                 application.match_result_id,
                 application.application_package_id,
                 application.company_intelligence_id,
+                None,
+                None,
             ),
         )
         created = cursor.fetchone()
@@ -102,6 +108,24 @@ def list_applications(
         return cursor.fetchall(), total
 
 
+def application_board(connection: Connection, *, page_size: int = 100) -> dict[str, list[dict]]:
+    board = {status: [] for status in APPLICATION_STATUSES}
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT *
+            FROM applications
+            ORDER BY created_at DESC
+            LIMIT %s
+            """,
+            (page_size,),
+        )
+        for row in cursor.fetchall():
+            if row["status"] in board:
+                board[row["status"]].append(row)
+    return board
+
+
 def update_application_status(
     connection: Connection,
     application_id: UUID,
@@ -132,6 +156,35 @@ def update_application_status(
             status_update.status,
         )
         return updated
+
+
+def update_application_next_action(
+    connection: Connection,
+    application_id: UUID,
+    next_action: ApplicationNextActionRequest,
+) -> dict | None:
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            UPDATE applications
+            SET next_action = %s,
+                next_action_due = %s,
+                updated_at = now()
+            WHERE id = %s
+            RETURNING *
+            """,
+            (next_action.next_action, next_action.due_date, application_id),
+        )
+        updated = cursor.fetchone()
+        return updated
+
+
+def application_artifact_readiness(application: dict) -> dict:
+    return {
+        "match_ready": application.get("match_result_id") is not None,
+        "package_ready": application.get("application_package_id") is not None,
+        "intelligence_ready": application.get("company_intelligence_id") is not None,
+    }
 
 
 def list_application_status_events(
@@ -169,6 +222,61 @@ def create_application_note(
             (application_id, sanitize_note(note.note)),
         )
         return cursor.fetchone()
+
+
+def latest_application_notes(
+    connection: Connection,
+    application_id: UUID,
+    *,
+    limit: int = 5,
+) -> list[dict]:
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT *
+            FROM application_notes
+            WHERE application_id = %s
+            ORDER BY created_at DESC
+            LIMIT %s
+            """,
+            (application_id, limit),
+        )
+        return cursor.fetchall()
+
+
+def latest_application_outcome(
+    connection: Connection,
+    application_id: UUID,
+) -> dict | None:
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT *
+            FROM application_outcomes
+            WHERE application_id = %s
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            (application_id,),
+        )
+        return cursor.fetchone()
+
+
+def application_summary(connection: Connection, application_id: UUID) -> dict | None:
+    application = get_application(connection, application_id)
+    if application is None:
+        return None
+
+    return {
+        "application": application,
+        "current_status": application["status"],
+        "next_action": application.get("next_action"),
+        "next_action_due": application.get("next_action_due"),
+        "latest_notes": latest_application_notes(connection, application_id),
+        "artifact_readiness": application_artifact_readiness(application),
+        "latest_outcome": latest_application_outcome(connection, application_id),
+        "status_history": list_application_status_events(connection, application_id),
+    }
 
 
 def _create_status_event(

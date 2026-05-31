@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import re
 from typing import Literal
+from datetime import date
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -17,11 +18,13 @@ APPLICATION_STATUSES = (
     "recruiter_replied",
     "interview_scheduled",
     "interview_completed",
-    "rejected",
     "offer_received",
     "hired",
+    "rejected",
     "withdrawn",
 )
+
+PIPELINE_STAGES = APPLICATION_STATUSES
 
 ApplicationStatus = Literal[
     "drafted",
@@ -29,9 +32,9 @@ ApplicationStatus = Literal[
     "recruiter_replied",
     "interview_scheduled",
     "interview_completed",
-    "rejected",
     "offer_received",
     "hired",
+    "rejected",
     "withdrawn",
 ]
 
@@ -48,6 +51,15 @@ class ApplicationCreateRequest(BaseModel):
 
 class ApplicationStatusUpdateRequest(BaseModel):
     status: ApplicationStatus
+
+
+class ApplicationTransitionRequest(BaseModel):
+    status: ApplicationStatus
+
+
+class ApplicationNextActionRequest(BaseModel):
+    next_action: str | None = Field(default=None, max_length=500)
+    due_date: date | None = None
 
 
 class ApplicationNoteRequest(BaseModel):
