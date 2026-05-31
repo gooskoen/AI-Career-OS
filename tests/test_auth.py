@@ -286,7 +286,7 @@ def test_cross_user_outcome_creation_returns_none() -> None:
     assert row is None
     assert "WHERE EXISTS" in connection.cursor_obj.last_query
     assert "AND user_id = %s" in connection.cursor_obj.last_query
-    assert connection.cursor_obj.last_params[-1] == user_id
+    assert connection.cursor_obj.last_params[-3] == user_id
 
 
 def test_cross_user_outcome_history_returns_empty() -> None:
