@@ -24,10 +24,13 @@ class CandidateProfile(BaseModel):
 class JobDescription(BaseModel):
     title: str
     company: str
+    location: str | None = None
     description: str
     required_skills: list[str] = Field(default_factory=list)
     nice_to_have_skills: list[str] = Field(default_factory=list)
+    source: str | None = None
     source_url: str | None = None
+    external_id: str | None = None
 
 
 class MatchRequest(BaseModel):
@@ -47,3 +50,14 @@ class PersistMatchRequest(BaseModel):
 
 class PersistBriefingRequest(BaseModel):
     match_result_id: UUID
+
+
+class JobImportTextRequest(BaseModel):
+    raw_text: str
+    source_url: str | None = None
+    match_candidate_id: UUID | None = None
+
+
+class JobImportUrlRequest(BaseModel):
+    url: str
+    match_candidate_id: UUID | None = None
