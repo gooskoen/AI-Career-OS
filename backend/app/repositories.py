@@ -9,6 +9,12 @@ from uuid import UUID
 
 from psycopg import Connection
 
+from app.application_domain import (
+    ApplicationCreateRequest,
+    ApplicationNoteRequest,
+    ApplicationStatusUpdateRequest,
+    sanitize_note,
+)
 from app.feedback import OutcomeRequest, sanitize_notes
 from app.matching import MatchResult
 from app.schemas import CandidateProfile, JobDescription
@@ -185,6 +191,89 @@ def list_match_results(connection: Connection) -> list[dict]:
 def get_match_result(connection: Connection, match_result_id: UUID) -> dict | None:
     with connection.cursor() as cursor:
         cursor.execute("SELECT * FROM match_results WHERE id = %s", (match_result_id,))
+        return cursor.fetchone()
+
+
+def create_application(
+    connection: Connection,
+    application: ApplicationCreateRequest,
+) -> dict:
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            INSERT INTO applications (
+                candidate_id,
+                job_id,
+                status,
+                source,
+                match_result_id,
+                application_package_id,
+                company_intelligence_id
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            RETURNING *
+            """,
+            (
+                application.candidate_id,
+                application.job_id,
+                application.status,
+                application.source,
+                application.match_result_id,
+                application.application_package_id,
+                application.company_intelligence_id,
+            ),
+        )
+        return cursor.fetchone()
+
+
+def get_application(connection: Connection, application_id: UUID) -> dict | None:
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT * FROM applications WHERE id = %s", (application_id,))
+        return cursor.fetchone()
+
+
+def list_applications(connection: Connection) -> list[dict]:
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT * FROM applications ORDER BY created_at DESC")
+        return cursor.fetchall()
+
+
+def update_application_status(
+    connection: Connection,
+    application_id: UUID,
+    status_update: ApplicationStatusUpdateRequest,
+) -> dict | None:
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            UPDATE applications
+            SET status = %s,
+                updated_at = now()
+            WHERE id = %s
+            RETURNING *
+            """,
+            (status_update.status, application_id),
+        )
+        return cursor.fetchone()
+
+
+def create_application_note(
+    connection: Connection,
+    application_id: UUID,
+    note: ApplicationNoteRequest,
+) -> dict:
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            INSERT INTO application_notes (
+                application_id,
+                note
+            )
+            VALUES (%s, %s)
+            RETURNING *
+            """,
+            (application_id, sanitize_note(note.note)),
+        )
         return cursor.fetchone()
 
 
