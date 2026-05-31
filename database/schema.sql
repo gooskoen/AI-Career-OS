@@ -56,11 +56,43 @@ CREATE TABLE IF NOT EXISTS interview_briefings (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS applications (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    candidate_id UUID NOT NULL REFERENCES candidate_profiles(id) ON DELETE CASCADE,
+    job_id UUID NOT NULL REFERENCES job_descriptions(id) ON DELETE CASCADE,
+    status TEXT NOT NULL DEFAULT 'drafted' CHECK (
+        status IN (
+            'drafted',
+            'applied',
+            'recruiter_replied',
+            'interview_scheduled',
+            'interview_completed',
+            'rejected',
+            'offer_received',
+            'hired',
+            'withdrawn'
+        )
+    ),
+    source TEXT,
+    match_result_id UUID REFERENCES match_results(id) ON DELETE SET NULL,
+    application_package_id UUID,
+    company_intelligence_id UUID,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS application_notes (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    application_id UUID NOT NULL REFERENCES applications(id) ON DELETE CASCADE,
+    note TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS application_outcomes (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     candidate_id UUID NOT NULL REFERENCES candidate_profiles(id) ON DELETE CASCADE,
     job_id UUID NOT NULL REFERENCES job_descriptions(id) ON DELETE CASCADE,
-    application_id UUID NOT NULL,
+    application_id UUID NOT NULL REFERENCES applications(id) ON DELETE CASCADE,
     outcome TEXT NOT NULL CHECK (
         outcome IN (
             'applied',
@@ -93,6 +125,15 @@ CREATE INDEX IF NOT EXISTS idx_job_descriptions_identity
 
 CREATE INDEX IF NOT EXISTS idx_match_results_score
     ON match_results(score DESC);
+
+CREATE INDEX IF NOT EXISTS idx_applications_candidate
+    ON applications(candidate_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_applications_job
+    ON applications(job_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_application_notes_application
+    ON application_notes(application_id, created_at DESC);
 
 CREATE INDEX IF NOT EXISTS idx_application_outcomes_candidate
     ON application_outcomes(candidate_id, created_at DESC);

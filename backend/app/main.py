@@ -14,6 +14,11 @@ from uuid import UUID
 from fastapi import FastAPI, HTTPException
 from psycopg import Error as PsycopgError
 
+from app.application_domain import (
+    ApplicationCreateRequest,
+    ApplicationNoteRequest,
+    ApplicationStatusUpdateRequest,
+)
 from app.application_package import (
     ApplicationPackageRequest,
     build_application_package,
@@ -38,21 +43,26 @@ from app.ingestion import (
 from app.matching import score_job_match
 from app.repositories import (
     candidate_from_row,
+    create_application,
+    create_application_note,
     create_candidate,
     create_application_outcome,
     create_interview_briefing,
     create_job,
     create_match_result,
     get_candidate,
+    get_application,
     get_job,
     get_match_result,
     job_from_row,
+    list_applications,
     list_candidates,
     list_application_outcomes,
     list_interview_briefings,
     list_jobs,
     list_match_results,
     match_from_row,
+    update_application_status,
 )
 from app.schemas import (
     BriefingRequest,
@@ -123,6 +133,51 @@ def application_package(request: ApplicationPackageRequest) -> dict:
         request.match_result,
     )
     return package.model_dump()
+
+
+@app.post("/applications")
+def persist_application(application: ApplicationCreateRequest) -> dict:
+    return _run_database_operation(
+        lambda connection: create_application(connection, application)
+    )
+
+
+@app.get("/applications")
+def get_applications() -> list[dict]:
+    return _run_database_operation(list_applications)
+
+
+@app.get("/applications/{application_id}")
+def read_application(application_id: UUID) -> dict:
+    return _run_database_operation(
+        lambda connection: _require_row(
+            get_application(connection, application_id),
+            "Application not found",
+        )
+    )
+
+
+@app.patch("/applications/{application_id}/status")
+def patch_application_status(
+    application_id: UUID,
+    status_update: ApplicationStatusUpdateRequest,
+) -> dict:
+    return _run_database_operation(
+        lambda connection: _require_row(
+            update_application_status(connection, application_id, status_update),
+            "Application not found",
+        )
+    )
+
+
+@app.post("/applications/{application_id}/notes")
+def post_application_note(
+    application_id: UUID,
+    note: ApplicationNoteRequest,
+) -> dict:
+    return _run_database_operation(
+        lambda connection: create_application_note(connection, application_id, note)
+    )
 
 
 @app.post("/intelligence/company")
@@ -288,9 +343,16 @@ def get_briefings() -> list[dict]:
 
 @app.post("/outcomes")
 def create_outcome(outcome: OutcomeRequest) -> dict:
-    return _run_database_operation(
-        lambda connection: create_application_outcome(connection, outcome)
-    )
+    def operation(connection):
+        created = create_application_outcome(connection, outcome)
+        update_application_status(
+            connection,
+            outcome.application_id,
+            ApplicationStatusUpdateRequest(status=outcome.outcome),
+        )
+        return created
+
+    return _run_database_operation(operation)
 
 
 @app.get("/outcomes/{candidate_id}")

@@ -24,6 +24,7 @@ or safe public URLs into PostgreSQL.
 - Deterministic application package generation for Sprint 5
 - Deterministic company and recruiter intelligence for Sprint 6
 - Deterministic feedback and outcome analytics for Sprint 7
+- First-class Application domain model for Sprint 8
 
 ## Persistence Status
 
@@ -49,6 +50,7 @@ AI-Career-OS
 |   |   +-- matching.py    # ATS-style keyword matching
 |   |   +-- application_package.py # Template-based application materials
 |   |   +-- company_intelligence.py # Company and recruiter preparation
+|   |   +-- application_domain.py # Application status and notes models
 |   |   +-- feedback.py    # Outcome analytics and candidate insights
 |   |   +-- briefing.py    # Interview briefing generator
 |   |   +-- database.py    # PostgreSQL connection helper
@@ -92,6 +94,11 @@ Useful endpoints:
 - `POST /match`
 - `POST /briefing`
 - `POST /applications/package`
+- `POST /applications`
+- `GET /applications`
+- `GET /applications/{application_id}`
+- `PATCH /applications/{application_id}/status`
+- `POST /applications/{application_id}/notes`
 - `POST /intelligence/company`
 - `POST /outcomes`
 - `GET /outcomes/{candidate_id}`
@@ -387,6 +394,69 @@ Supported outcomes are `applied`, `recruiter_replied`, `interview_scheduled`,
 `interview_completed`, `rejected`, `offer_received`, `hired`, and `withdrawn`.
 The analytics include application-to-reply, reply-to-interview, interview-to-offer,
 and offer-to-hire rates.
+
+## Sprint 8 Application Domain Model
+
+Sprint 8 introduces `Application` as the primary business object connecting candidates,
+jobs, matches, generated packages, company intelligence, outcomes, and notes.
+
+```text
+Candidate
+    |
+    v
+Application
+    |
+    v
+Job
+
+Application
++-- MatchResult
++-- ApplicationPackage
++-- CompanyIntelligence
++-- Outcomes
++-- Notes
+```
+
+Create an application:
+
+```bash
+curl -X POST http://localhost:8000/applications \
+  -H "Content-Type: application/json" \
+  -d '{
+    "candidate_id": "<candidate-id>",
+    "job_id": "<job-id>",
+    "status": "drafted",
+    "source": "manual",
+    "match_result_id": "<match-result-id>"
+  }'
+```
+
+List and retrieve applications:
+
+```bash
+curl http://localhost:8000/applications
+curl http://localhost:8000/applications/<application-id>
+```
+
+Update application status:
+
+```bash
+curl -X PATCH http://localhost:8000/applications/<application-id>/status \
+  -H "Content-Type: application/json" \
+  -d '{"status": "interview_scheduled"}'
+```
+
+Add an application note:
+
+```bash
+curl -X POST http://localhost:8000/applications/<application-id>/notes \
+  -H "Content-Type: application/json" \
+  -d '{"note": "Prepare a stronger Kubernetes project example before interview."}'
+```
+
+Sprint 8 remains deterministic domain modeling only. It does not add dashboards,
+machine learning, LLM integration, web browsing, LinkedIn automation, or automatic
+applications.
 
 ## Local Backend Development
 
