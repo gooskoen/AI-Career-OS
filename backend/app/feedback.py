@@ -47,12 +47,12 @@ class OutcomeRequest(BaseModel):
     job_id: UUID
     application_id: UUID
     outcome: ApplicationOutcome
-    notes: str = ""
+    notes: str = Field(default="", max_length=5_000)
     cv_edits_applied: bool = False
     cover_letter_used: bool = False
     interview_prep_used: bool = False
-    skills: list[str] = Field(default_factory=list)
-    job_family: str | None = None
+    skills: list[str] = Field(default_factory=list, max_length=50)
+    job_family: str | None = Field(default=None, max_length=200)
 
 
 def sanitize_notes(notes: str) -> str:

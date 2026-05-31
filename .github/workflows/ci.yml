@@ -28,5 +28,8 @@ jobs:
       - name: Compile backend
         run: python -m compileall backend/app
 
+      - name: Validate migrations
+        run: alembic heads
+
       - name: Run tests
         run: pytest
