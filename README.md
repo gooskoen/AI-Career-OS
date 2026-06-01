@@ -30,6 +30,7 @@ or safe public URLs into PostgreSQL.
 - Application pipeline and Kanban-ready workflow endpoints for Sprint 10
 - Authentication and user ownership foundation for Sprint 11
 - User-scoped reporting and deterministic insights for Sprint 12
+- React dashboard and private beta UX foundation for Sprint 13
 
 ## Persistence Status
 
@@ -71,6 +72,11 @@ AI-Career-OS
 |   |   +-- schemas.py     # Pydantic request/response models
 |   +-- Dockerfile
 |   +-- requirements.txt
++-- frontend/
+|   +-- src/
+|   |   +-- App.tsx      # Private beta dashboard shell
+|   |   +-- api.ts       # Existing backend API integration
+|   +-- package.json
 +-- database/
 |   +-- schema.sql         # PostgreSQL schema
 +-- docs/
@@ -78,6 +84,7 @@ AI-Career-OS
 |   +-- architecture.md
 |   +-- migrations.md
 |   +-- reporting.md
+|   +-- frontend.md
 +-- migrations/
 |   +-- versions/
 +-- examples/
@@ -545,6 +552,23 @@ See [`docs/reporting.md`](docs/reporting.md) for endpoint examples and supported
 
 Sprint 12 does not add recruiter CRM, email sending, automation, AI or LLM calls,
 web browsing, LinkedIn automation, or a dashboard frontend.
+
+## Sprint 13 UX And Dashboard Layer
+
+Sprint 13 adds the first React and TypeScript user experience for the private beta:
+authentication screens, dashboard reporting, application kanban, application detail,
+insights, profile navigation, and frontend tests.
+
+See [`docs/frontend.md`](docs/frontend.md) for frontend architecture and API
+integration notes.
+
+Frontend development:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
 ## Local Backend Development
 
