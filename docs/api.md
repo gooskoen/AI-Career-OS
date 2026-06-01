@@ -30,6 +30,12 @@ Licensed under the Apache License, Version 2.0.
 - `POST /outcomes`
 - `GET /outcomes/{candidate_id}`
 - `GET /insights/candidate/{candidate_id}`
+- `GET /reporting/dashboard`
+- `GET /reporting/funnel`
+- `GET /reporting/applications`
+- `GET /reporting/outcomes`
+- `GET /reporting/skills`
+- `GET /reporting/recommendations`
 - `POST /candidates`
 - `GET /candidates`
 - `POST /jobs`
@@ -82,6 +88,28 @@ curl -X POST http://localhost:8000/auth/refresh \
 
 Candidate profiles, applications, notes, outcomes, persisted matches, and persisted
 briefings are scoped to the authenticated user.
+
+## Reporting
+
+Sprint 12 adds read-only, user-scoped reporting endpoints. All reporting endpoints
+require the same bearer token as other private workflow endpoints.
+
+Supported `time_window` values:
+
+- `last_30_days`
+- `last_90_days`
+- `last_year`
+- `all_time`
+
+Example:
+
+```bash
+curl "http://localhost:8000/reporting/dashboard?time_window=last_90_days" \
+  -H "Authorization: Bearer <access-token>"
+```
+
+Reporting endpoints are deterministic and do not call LLMs, browse the web, send
+email, or perform automation.
 
 ## Application filtering and pagination
 
@@ -201,6 +229,5 @@ Validation errors return a standard error response:
 
 ## Guardrails
 
-The API does not implement reporting dashboards, recruiter CRM, OAuth/social login,
-LLM calls, web browsing, LinkedIn automation, automatic applications, email sending,
-or a dashboard frontend in Sprint 11.
+The API does not implement recruiter CRM, OAuth/social login, LLM calls, web browsing,
+LinkedIn automation, automatic applications, email sending, or a dashboard frontend.

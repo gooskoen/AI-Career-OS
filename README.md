@@ -29,6 +29,7 @@ or safe public URLs into PostgreSQL.
   status events, and application pagination for Sprint 9
 - Application pipeline and Kanban-ready workflow endpoints for Sprint 10
 - Authentication and user ownership foundation for Sprint 11
+- User-scoped reporting and deterministic insights for Sprint 12
 
 ## Persistence Status
 
@@ -63,6 +64,7 @@ AI-Career-OS
 |   |   +-- company_intelligence.py # Company and recruiter preparation
 |   |   +-- application_domain.py # Application status and notes models
 |   |   +-- feedback.py    # Outcome analytics and candidate insights
+|   |   +-- reporting.py   # Read-only reporting calculations
 |   |   +-- briefing.py    # Interview briefing generator
 |   |   +-- database.py    # PostgreSQL connection helper
 |   |   +-- ingestion.py   # Job text and URL import helpers
@@ -75,6 +77,7 @@ AI-Career-OS
 |   +-- api.md
 |   +-- architecture.md
 |   +-- migrations.md
+|   +-- reporting.md
 +-- migrations/
 |   +-- versions/
 +-- examples/
@@ -530,6 +533,18 @@ See [`docs/authentication.md`](docs/authentication.md) and
 
 Sprint 11 does not add OAuth, social login, reporting, recruiter CRM, LLM integration,
 web browsing, email sending, LinkedIn automation, or automatic applications.
+
+## Sprint 12 Reporting And Insights
+
+Sprint 12 adds read-only, user-scoped reporting endpoints for dashboard summaries,
+funnel conversion, application analytics, outcome analytics, skill performance, and
+recommendation usage.
+
+See [`docs/reporting.md`](docs/reporting.md) for endpoint examples and supported
+`time_window` filters.
+
+Sprint 12 does not add recruiter CRM, email sending, automation, AI or LLM calls,
+web browsing, LinkedIn automation, or a dashboard frontend.
 
 ## Local Backend Development
 

@@ -43,6 +43,10 @@ from app.repositories.outcomes import (
     create_application_outcome,
     list_application_outcomes,
 )
+from app.repositories.reporting import (
+    list_reporting_applications,
+    list_reporting_outcomes,
+)
 from app.repositories.users import (
     create_auth_audit_event,
     create_refresh_token_record,
@@ -86,6 +90,8 @@ __all__ = [
     "list_interview_briefings",
     "list_jobs",
     "list_match_results",
+    "list_reporting_applications",
+    "list_reporting_outcomes",
     "match_from_row",
     "update_application_next_action",
     "update_application_status",

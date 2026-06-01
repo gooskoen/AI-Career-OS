@@ -8,7 +8,8 @@ Licensed under the Apache License, Version 2.0.
 
 AI-Career-OS is a FastAPI and PostgreSQL MVP organized around the `Application`
 domain entity. Sprint 11 adds a first-party `User` owner so career data is scoped
-to the authenticated account that created it.
+to the authenticated account that created it. Sprint 12 adds read-only reporting
+over existing user-owned application and outcome data.
 
 ```text
 User
@@ -44,6 +45,7 @@ backend/app/
 |   +-- intelligence.py
 |   +-- outcomes.py
 |   +-- auth.py
+|   +-- reporting.py
 +-- repositories/           # PostgreSQL data access by aggregate
 |   +-- users.py
 |   +-- candidates.py
@@ -52,6 +54,7 @@ backend/app/
 |   +-- matching.py
 |   +-- intelligence.py
 |   +-- outcomes.py
+|   +-- reporting.py
 +-- application_domain.py   # Application request models and note sanitizing
 +-- application_package.py  # Deterministic application package generation
 +-- auth.py                 # Password hashing and JWT helpers
@@ -63,6 +66,7 @@ backend/app/
 +-- feedback.py             # Outcome analytics and insights
 +-- ingestion.py            # Manual job import helpers
 +-- matching.py             # Deterministic matching and gap analysis
++-- reporting.py            # Read-only reporting calculations
 +-- responses.py            # Standard response models
 +-- schemas.py              # Shared Pydantic request models
 ```
