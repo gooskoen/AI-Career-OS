@@ -5,8 +5,34 @@
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
+CREATE TABLE IF NOT EXISTS users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email TEXT NOT NULL UNIQUE,
+    display_name TEXT NOT NULL,
+    password_hash TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS refresh_tokens (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token_hash TEXT NOT NULL UNIQUE,
+    expires_at TIMESTAMPTZ NOT NULL,
+    revoked_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS auth_audit_events (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    event_type TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS candidate_profiles (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     display_name TEXT NOT NULL,
     headline TEXT NOT NULL,
     location TEXT,
@@ -36,6 +62,7 @@ CREATE TABLE IF NOT EXISTS job_descriptions (
 
 CREATE TABLE IF NOT EXISTS match_results (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     candidate_profile_id UUID NOT NULL REFERENCES candidate_profiles(id) ON DELETE CASCADE,
     job_description_id UUID NOT NULL REFERENCES job_descriptions(id) ON DELETE CASCADE,
     score INTEGER NOT NULL CHECK (score >= 0 AND score <= 100),
@@ -47,6 +74,7 @@ CREATE TABLE IF NOT EXISTS match_results (
 
 CREATE TABLE IF NOT EXISTS interview_briefings (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     match_result_id UUID NOT NULL REFERENCES match_results(id) ON DELETE CASCADE,
     positioning_statement TEXT NOT NULL,
     strengths_to_emphasize TEXT[] NOT NULL DEFAULT '{}',
@@ -58,6 +86,7 @@ CREATE TABLE IF NOT EXISTS interview_briefings (
 
 CREATE TABLE IF NOT EXISTS applications (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     candidate_id UUID NOT NULL REFERENCES candidate_profiles(id) ON DELETE CASCADE,
     job_id UUID NOT NULL REFERENCES job_descriptions(id) ON DELETE CASCADE,
     status TEXT NOT NULL DEFAULT 'drafted' CHECK (
@@ -85,6 +114,7 @@ CREATE TABLE IF NOT EXISTS applications (
 
 CREATE TABLE IF NOT EXISTS application_notes (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     application_id UUID NOT NULL REFERENCES applications(id) ON DELETE CASCADE,
     note TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -100,6 +130,7 @@ CREATE TABLE IF NOT EXISTS application_status_events (
 
 CREATE TABLE IF NOT EXISTS application_outcomes (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     candidate_id UUID NOT NULL REFERENCES candidate_profiles(id) ON DELETE CASCADE,
     job_id UUID NOT NULL REFERENCES job_descriptions(id) ON DELETE CASCADE,
     application_id UUID NOT NULL REFERENCES applications(id) ON DELETE CASCADE,
@@ -124,6 +155,34 @@ CREATE TABLE IF NOT EXISTS application_outcomes (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS application_packages (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    application_id UUID REFERENCES applications(id) ON DELETE CASCADE,
+    package JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS company_intelligence_reports (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    application_id UUID REFERENCES applications(id) ON DELETE CASCADE,
+    report JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_users_email
+    ON users(email);
+
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user
+    ON refresh_tokens(user_id, expires_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_auth_audit_events_user
+    ON auth_audit_events(user_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_candidate_profiles_user
+    ON candidate_profiles(user_id, created_at DESC);
+
 CREATE INDEX IF NOT EXISTS idx_job_descriptions_company
     ON job_descriptions(company);
 
@@ -136,14 +195,20 @@ CREATE INDEX IF NOT EXISTS idx_job_descriptions_identity
 CREATE INDEX IF NOT EXISTS idx_match_results_score
     ON match_results(score DESC);
 
-CREATE INDEX IF NOT EXISTS idx_applications_candidate
-    ON applications(candidate_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_match_results_user
+    ON match_results(user_id, created_at DESC);
 
-CREATE INDEX IF NOT EXISTS idx_applications_job
-    ON applications(job_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_interview_briefings_user
+    ON interview_briefings(user_id, created_at DESC);
 
-CREATE INDEX IF NOT EXISTS idx_applications_status
-    ON applications(status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_applications_user_candidate
+    ON applications(user_id, candidate_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_applications_user_job
+    ON applications(user_id, job_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_applications_user_status
+    ON applications(user_id, status, created_at DESC);
 
 CREATE INDEX IF NOT EXISTS idx_applications_next_action_due
     ON applications(next_action_due, status);
@@ -151,11 +216,17 @@ CREATE INDEX IF NOT EXISTS idx_applications_next_action_due
 CREATE INDEX IF NOT EXISTS idx_application_status_events_application
     ON application_status_events(application_id, created_at ASC);
 
-CREATE INDEX IF NOT EXISTS idx_application_notes_application
-    ON application_notes(application_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_application_notes_user_application
+    ON application_notes(user_id, application_id, created_at DESC);
 
-CREATE INDEX IF NOT EXISTS idx_application_outcomes_candidate
-    ON application_outcomes(candidate_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_application_outcomes_user_candidate
+    ON application_outcomes(user_id, candidate_id, created_at DESC);
 
-CREATE INDEX IF NOT EXISTS idx_application_outcomes_application
-    ON application_outcomes(application_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_application_outcomes_user_application
+    ON application_outcomes(user_id, application_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_application_packages_user
+    ON application_packages(user_id, application_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_company_intelligence_reports_user
+    ON company_intelligence_reports(user_id, application_id, created_at DESC);

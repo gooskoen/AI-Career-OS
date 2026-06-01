@@ -5,7 +5,9 @@
 
 from __future__ import annotations
 
-from app.dependencies import require_row, run_database_operation
+from fastapi import APIRouter, Depends
+
+from app.dependencies import current_user, require_row, run_database_operation
 from app.ingestion import import_job_from_text, import_job_from_url
 from app.matching import score_job_match
 from app.repositories import (
@@ -17,7 +19,6 @@ from app.repositories import (
     list_jobs,
 )
 from app.schemas import JobDescription, JobImportTextRequest, JobImportUrlRequest
-from fastapi import APIRouter
 
 router = APIRouter()
 
@@ -33,7 +34,10 @@ def get_jobs() -> list[dict]:
 
 
 @router.post("/jobs/import-text")
-def import_text_job(request: JobImportTextRequest) -> dict:
+def import_text_job(
+    request: JobImportTextRequest,
+    user: dict = Depends(current_user),
+) -> dict:
     def operation(connection):
         import_result = import_job_from_text(
             connection,
@@ -45,6 +49,7 @@ def import_text_job(request: JobImportTextRequest) -> dict:
             connection,
             job_row,
             request.match_candidate_id,
+            user["id"],
         )
         return {
             "job": job_row,
@@ -56,7 +61,10 @@ def import_text_job(request: JobImportTextRequest) -> dict:
 
 
 @router.post("/jobs/import-url")
-def import_url_job(request: JobImportUrlRequest) -> dict:
+def import_url_job(
+    request: JobImportUrlRequest,
+    user: dict = Depends(current_user),
+) -> dict:
     def operation(connection):
         import_result = import_job_from_url(connection, request.url)
         job_row = import_result["job"]
@@ -64,6 +72,7 @@ def import_url_job(request: JobImportUrlRequest) -> dict:
             connection,
             job_row,
             request.match_candidate_id,
+            user["id"],
         )
         return {
             "job": job_row,
@@ -74,13 +83,18 @@ def import_url_job(request: JobImportUrlRequest) -> dict:
     return run_database_operation(operation)
 
 
-def _create_optional_match(connection, job_row: dict, candidate_id) -> dict | None:
+def _create_optional_match(
+    connection,
+    job_row: dict,
+    candidate_id,
+    user_id,
+) -> dict | None:
     if candidate_id is None:
         return None
 
     candidate_row = require_row(
-        get_candidate(connection, candidate_id),
+        get_candidate(connection, candidate_id, user_id),
         "Candidate profile not found",
     )
     match = score_job_match(candidate_from_row(candidate_row), job_from_row(job_row))
-    return create_match_result(connection, candidate_id, job_row["id"], match)
+    return create_match_result(connection, candidate_id, job_row["id"], match, user_id)

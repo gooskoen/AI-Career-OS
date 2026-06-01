@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from uuid import uuid4
 
+import pytest
+
 from app.application_domain import (
     ApplicationCreateRequest,
     ApplicationNoteRequest,
@@ -33,6 +35,7 @@ def test_application_creation() -> None:
     candidate_id = uuid4()
     job_id = uuid4()
     application_id = uuid4()
+    user_id = uuid4()
     connection = FakeConnection(
         [
             {
@@ -52,6 +55,7 @@ def test_application_creation() -> None:
             job_id=job_id,
             source="manual",
         ),
+        user_id,
     )
 
     assert row["candidate_id"] == candidate_id
@@ -60,10 +64,12 @@ def test_application_creation() -> None:
     assert "INSERT INTO applications" in connection.cursor_obj.queries[0]
     assert "INSERT INTO application_status_events" in connection.cursor_obj.queries[1]
     assert connection.cursor_obj.params[1] == (application_id, None, "drafted")
+    assert connection.cursor_obj.params[0][0] == user_id
 
 
 def test_application_retrieval() -> None:
     application_id = uuid4()
+    user_id = uuid4()
     connection = FakeConnection(
         [
             {"id": application_id, "status": "applied"},
@@ -72,17 +78,19 @@ def test_application_retrieval() -> None:
         ]
     )
 
-    row = get_application(connection, application_id)
-    rows, total = list_applications(connection)
+    row = get_application(connection, application_id, user_id)
+    rows, total = list_applications(connection, user_id=user_id)
 
     assert row["id"] == application_id
     assert total == 1
     assert rows == [{"id": application_id, "status": "applied"}]
     assert "ORDER BY created_at DESC" in connection.cursor_obj.last_query
+    assert connection.cursor_obj.params[0] == (application_id, user_id)
 
 
 def test_status_updates() -> None:
     application_id = uuid4()
+    user_id = uuid4()
     connection = FakeConnection(
         [
             {"status": "applied"},
@@ -94,11 +102,16 @@ def test_status_updates() -> None:
         connection,
         application_id,
         ApplicationStatusUpdateRequest(status="interview_scheduled"),
+        user_id,
     )
 
     assert row["status"] == "interview_scheduled"
     assert "UPDATE applications" in connection.cursor_obj.queries[1]
-    assert connection.cursor_obj.params[1] == ("interview_scheduled", application_id)
+    assert connection.cursor_obj.params[1] == (
+        "interview_scheduled",
+        application_id,
+        user_id,
+    )
     assert "INSERT INTO application_status_events" in connection.cursor_obj.queries[2]
     assert connection.cursor_obj.params[2] == (
         application_id,
@@ -114,6 +127,7 @@ def test_status_update_missing_application_returns_none() -> None:
         connection,
         uuid4(),
         ApplicationStatusUpdateRequest(status="interview_scheduled"),
+        uuid4(),
     )
 
     assert row is None
@@ -122,6 +136,7 @@ def test_status_update_missing_application_returns_none() -> None:
 
 def test_application_status_event_history() -> None:
     application_id = uuid4()
+    user_id = uuid4()
     connection = FakeConnection(
         [
             [
@@ -134,13 +149,37 @@ def test_application_status_event_history() -> None:
         ]
     )
 
-    rows = list_application_status_events(connection, application_id)
+    rows = list_application_status_events(connection, application_id, user_id)
 
     assert rows[0]["new_status"] == "applied"
     assert "application_status_events" in connection.cursor_obj.last_query
+    assert connection.cursor_obj.last_params == (application_id, user_id)
+
+
+def test_private_application_repositories_require_user_id() -> None:
+    connection = FakeConnection([])
+    application_id = uuid4()
+
+    with pytest.raises(ValueError):
+        get_application(connection, application_id, None)
+
+    with pytest.raises(ValueError):
+        list_applications(connection, user_id=None)
+
+    with pytest.raises(ValueError):
+        update_application_status(
+            connection,
+            application_id,
+            ApplicationStatusUpdateRequest(status="applied"),
+            None,
+        )
+
+    with pytest.raises(ValueError):
+        list_application_status_events(connection, application_id, None)
 
 
 def test_application_board_groups_by_pipeline_stage() -> None:
+    user_id = uuid4()
     connection = FakeConnection(
         [
             [
@@ -151,7 +190,7 @@ def test_application_board_groups_by_pipeline_stage() -> None:
         ]
     )
 
-    board = application_board(connection)
+    board = application_board(connection, user_id=user_id)
 
     assert list(board.keys()) == [
         "drafted",
@@ -188,6 +227,7 @@ def test_next_action_updates_application_without_status_event() -> None:
             next_action="follow up recruiter",
             due_date="2026-06-07",
         ),
+        uuid4(),
     )
 
     assert row["next_action"] == "follow up recruiter"
@@ -216,6 +256,7 @@ def test_artifact_readiness_reflects_application_references() -> None:
 
 def test_application_summary_combines_application_context() -> None:
     application_id = uuid4()
+    user_id = uuid4()
     connection = FakeConnection(
         [
             {
@@ -233,7 +274,7 @@ def test_application_summary_combines_application_context() -> None:
         ]
     )
 
-    summary = application_summary(connection, application_id)
+    summary = application_summary(connection, application_id, user_id)
 
     assert summary is not None
     assert summary["current_status"] == "interview_scheduled"
@@ -256,11 +297,12 @@ def test_outcome_linkage() -> None:
             outcome="recruiter_replied",
             notes="Recruiter replied.",
         ),
+        uuid4(),
     )
 
     assert row["application_id"] == application_id
     assert "application_id" in connection.cursor_obj.last_query
-    assert connection.cursor_obj.last_params[2] == application_id
+    assert connection.cursor_obj.last_params[3] == application_id
 
 
 def test_note_creation_redacts_private_data() -> None:
@@ -273,9 +315,10 @@ def test_note_creation_redacts_private_data() -> None:
         ApplicationNoteRequest(
             note="Recruiter email alex@example.com and phone +32 499 12 34 56."
         ),
+        uuid4(),
     )
 
-    stored_note = connection.cursor_obj.last_params[1]
+    stored_note = connection.cursor_obj.last_params[2]
     assert "alex@example.com" not in stored_note
     assert "+32 499 12 34 56" not in stored_note
     assert "[redacted]" in stored_note

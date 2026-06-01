@@ -7,9 +7,13 @@ Licensed under the Apache License, Version 2.0.
 ## Current architecture
 
 AI-Career-OS is a FastAPI and PostgreSQL MVP organized around the `Application`
-domain entity.
+domain entity. Sprint 11 adds a first-party `User` owner so career data is scoped
+to the authenticated account that created it.
 
 ```text
+User
+    |
+    v
 Candidate
     |
     v
@@ -39,7 +43,9 @@ backend/app/
 |   +-- matching.py
 |   +-- intelligence.py
 |   +-- outcomes.py
+|   +-- auth.py
 +-- repositories/           # PostgreSQL data access by aggregate
+|   +-- users.py
 |   +-- candidates.py
 |   +-- jobs.py
 |   +-- applications.py
@@ -48,6 +54,7 @@ backend/app/
 |   +-- outcomes.py
 +-- application_domain.py   # Application request models and note sanitizing
 +-- application_package.py  # Deterministic application package generation
++-- auth.py                 # Password hashing and JWT helpers
 +-- briefing.py             # Interview briefing generation
 +-- company_intelligence.py # Deterministic company/recruiter preparation
 +-- database.py             # PostgreSQL connection helper
@@ -64,6 +71,7 @@ backend/app/
 
 - Keep deterministic behavior first.
 - Keep Application as the central business object.
+- Scope private career data by authenticated user.
 - Keep API routes thin and domain-oriented.
 - Keep repository functions explicit and readable.
 - Avoid LLMs, paid APIs, scraping, LinkedIn automation, and automatic applications.
@@ -78,6 +86,20 @@ Sprint 9 separates status, history, and business outcomes:
 - `application_outcomes`: real-world business results and recommendation usage.
 
 This keeps the current status fast to read while preserving an audit-friendly timeline.
+
+## Ownership model
+
+Sprint 11 introduces:
+
+- `users`: local user accounts with unique email addresses and hashed passwords.
+- `refresh_tokens`: stored refresh token hashes for token renewal.
+- `auth_audit_events`: register, login, and refresh audit records.
+- `user_id` ownership on candidate profiles, applications, notes, outcomes,
+  persisted matches, persisted briefings, and generated artifact tables.
+
+Repository methods that read or write private career data accept `user_id` and scope
+queries accordingly. Cross-user reads intentionally return not found responses rather
+than revealing that another user's record exists.
 
 ## Error model
 

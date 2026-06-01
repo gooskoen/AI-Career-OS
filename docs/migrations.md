@@ -57,3 +57,24 @@ pytest
 
 Sprint 9 adds `application_status_events` to track application workflow history while
 preserving `applications.status` as the current state.
+
+## Authentication and ownership addition
+
+Sprint 11 adds `0003_auth_ownership.py`.
+
+The migration creates:
+
+- `users`
+- `refresh_tokens`
+- `auth_audit_events`
+
+It also backfills a demo owner for existing local data and adds `user_id` ownership
+columns to private career records. Existing candidate profiles, applications, notes,
+outcomes, matches, and briefings are assigned to the demo owner during upgrade so a
+clean upgrade path exists for development databases.
+
+Run the full migration chain from an empty database with:
+
+```bash
+alembic upgrade head
+```

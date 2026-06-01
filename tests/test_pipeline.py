@@ -9,15 +9,25 @@ from uuid import uuid4
 
 from fastapi.testclient import TestClient
 
+from app.dependencies import current_user
 from app.main import app
+
+
+def _client() -> TestClient:
+    app.dependency_overrides[current_user] = lambda: {
+        "id": uuid4(),
+        "email": "demo@example.com",
+    }
+    return TestClient(app)
 
 
 def test_board_endpoint_returns_pipeline_stages(monkeypatch) -> None:
     def fake_run_database_operation(operation):
         return operation(object())
 
-    def fake_board(connection, *, page_size=100):
+    def fake_board(connection, *, page_size=100, user_id=None):
         assert page_size == 25
+        assert user_id is not None
         return {
             "drafted": [{"id": str(uuid4()), "status": "drafted"}],
             "applied": [],
@@ -39,7 +49,8 @@ def test_board_endpoint_returns_pipeline_stages(monkeypatch) -> None:
     )
     monkeypatch.setattr(applications_router, "application_board", fake_board)
 
-    response = TestClient(app).get("/applications/board?page_size=25")
+    response = _client().get("/applications/board?page_size=25")
+    app.dependency_overrides.clear()
 
     assert response.status_code == 200
     assert list(response.json().keys()) == [
@@ -61,8 +72,9 @@ def test_transition_endpoint_updates_status(monkeypatch) -> None:
     def fake_run_database_operation(operation):
         return operation(object())
 
-    def fake_update_status(connection, target_application_id, status_update):
+    def fake_update_status(connection, target_application_id, status_update, user_id=None):
         assert target_application_id == application_id
+        assert user_id is not None
         assert status_update.status == "interview_scheduled"
         return {"id": application_id, "status": status_update.status}
 
@@ -79,10 +91,11 @@ def test_transition_endpoint_updates_status(monkeypatch) -> None:
         fake_update_status,
     )
 
-    response = TestClient(app).post(
+    response = _client().post(
         f"/applications/{application_id}/transition",
         json={"status": "interview_scheduled"},
     )
+    app.dependency_overrides.clear()
 
     assert response.status_code == 200
     assert response.json()["status"] == "interview_scheduled"
@@ -94,8 +107,9 @@ def test_next_action_endpoint_updates_follow_up_date(monkeypatch) -> None:
     def fake_run_database_operation(operation):
         return operation(object())
 
-    def fake_update_next_action(connection, target_application_id, next_action):
+    def fake_update_next_action(connection, target_application_id, next_action, user_id):
         assert target_application_id == application_id
+        assert user_id is not None
         assert next_action.next_action == "prepare interview"
         assert str(next_action.due_date) == "2026-06-10"
         return {
@@ -117,10 +131,11 @@ def test_next_action_endpoint_updates_follow_up_date(monkeypatch) -> None:
         fake_update_next_action,
     )
 
-    response = TestClient(app).patch(
+    response = _client().patch(
         f"/applications/{application_id}/next-action",
         json={"next_action": "prepare interview", "due_date": "2026-06-10"},
     )
+    app.dependency_overrides.clear()
 
     assert response.status_code == 200
     assert response.json()["next_action"] == "prepare interview"
@@ -133,8 +148,9 @@ def test_readiness_endpoint_reports_artifacts(monkeypatch) -> None:
     def fake_run_database_operation(operation):
         return operation(object())
 
-    def fake_get_application(connection, target_application_id):
+    def fake_get_application(connection, target_application_id, user_id):
         assert target_application_id == application_id
+        assert user_id is not None
         return {
             "id": application_id,
             "match_result_id": uuid4(),
@@ -151,7 +167,8 @@ def test_readiness_endpoint_reports_artifacts(monkeypatch) -> None:
     )
     monkeypatch.setattr(applications_router, "get_application", fake_get_application)
 
-    response = TestClient(app).get(f"/applications/{application_id}/readiness")
+    response = _client().get(f"/applications/{application_id}/readiness")
+    app.dependency_overrides.clear()
 
     assert response.status_code == 200
     assert response.json() == {
@@ -167,8 +184,9 @@ def test_summary_endpoint_returns_application_overview(monkeypatch) -> None:
     def fake_run_database_operation(operation):
         return operation(object())
 
-    def fake_summary(connection, target_application_id):
+    def fake_summary(connection, target_application_id, user_id):
         assert target_application_id == application_id
+        assert user_id is not None
         return {
             "application": {"id": application_id, "status": "applied"},
             "current_status": "applied",
@@ -192,7 +210,8 @@ def test_summary_endpoint_returns_application_overview(monkeypatch) -> None:
     )
     monkeypatch.setattr(applications_router, "application_summary", fake_summary)
 
-    response = TestClient(app).get(f"/applications/{application_id}/summary")
+    response = _client().get(f"/applications/{application_id}/summary")
+    app.dependency_overrides.clear()
 
     assert response.status_code == 200
     assert response.json()["current_status"] == "applied"

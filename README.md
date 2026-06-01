@@ -27,6 +27,8 @@ or safe public URLs into PostgreSQL.
 - First-class Application domain model for Sprint 8
 - Architecture hardening, migrations, router/repository boundaries, standard errors,
   status events, and application pagination for Sprint 9
+- Application pipeline and Kanban-ready workflow endpoints for Sprint 10
+- Authentication and user ownership foundation for Sprint 11
 
 ## Persistence Status
 
@@ -44,14 +46,16 @@ simple HTTP GET requests against safe public `http` and `https` URLs.
 
 ## Architecture
 
-See [`docs/architecture.md`](docs/architecture.md) for the Sprint 9 architecture
-notes, router/repository layout, response model direction, and status event model.
+See [`docs/architecture.md`](docs/architecture.md) for the current architecture
+notes, router/repository layout, response model direction, status event model, and
+user ownership model.
 
 ```text
 AI-Career-OS
 +-- backend/
 |   +-- app/
 |   |   +-- main.py        # FastAPI app wiring
+|   |   +-- auth.py        # Password hashing and JWT helpers
 |   |   +-- routers/       # Route groups by domain
 |   |   +-- repositories/  # Data-access functions by aggregate
 |   |   +-- matching.py    # ATS-style keyword matching
@@ -81,7 +85,9 @@ AI-Career-OS
 Additional docs:
 
 - [`docs/api.md`](docs/api.md)
+- [`docs/authentication.md`](docs/authentication.md)
 - [`docs/migrations.md`](docs/migrations.md)
+- [`docs/security.md`](docs/security.md)
 
 ## Quick Start
 
@@ -106,6 +112,9 @@ http://localhost:8000/docs
 Useful endpoints:
 
 - `GET /health`
+- `POST /auth/register`
+- `POST /auth/login`
+- `POST /auth/refresh`
 - `GET /demo/candidate`
 - `GET /demo/match`
 - `POST /match`
@@ -130,6 +139,16 @@ Useful endpoints:
 - `GET /matches`
 - `POST /briefings/persist`
 - `GET /briefings`
+
+Sprint 11 protects private persistence and workflow endpoints with bearer token
+authentication. Register or log in first, then send:
+
+```bash
+Authorization: Bearer <access-token>
+```
+
+Set `AUTH_SECRET` before starting the API. The app fails startup when the secret is
+missing.
 
 ## Sprint 2 Persistence Usage
 
@@ -499,6 +518,18 @@ Migration commands:
 alembic heads
 alembic upgrade head
 ```
+
+## Sprint 11 Authentication And Ownership
+
+Sprint 11 adds local JWT authentication and user ownership for private career data.
+Candidate profiles, applications, notes, outcomes, persisted matches, and persisted
+briefings are scoped by `user_id` in repository queries.
+
+See [`docs/authentication.md`](docs/authentication.md) and
+[`docs/security.md`](docs/security.md) for the token flow and authorization rules.
+
+Sprint 11 does not add OAuth, social login, reporting, recruiter CRM, LLM integration,
+web browsing, email sending, LinkedIn automation, or automatic applications.
 
 ## Local Backend Development
 
