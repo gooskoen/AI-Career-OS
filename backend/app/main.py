@@ -22,6 +22,7 @@ from app.routers import (
     jobs,
     matching,
     outcomes,
+    reporting,
 )
 
 require_auth_secret()
@@ -43,3 +44,4 @@ app.include_router(matching.router)
 app.include_router(applications.router)
 app.include_router(intelligence.router)
 app.include_router(outcomes.router)
+app.include_router(reporting.router)

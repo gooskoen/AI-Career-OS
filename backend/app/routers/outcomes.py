@@ -13,9 +13,9 @@ from app.application_domain import ApplicationStatusUpdateRequest
 from app.dependencies import current_user, require_row, run_database_operation
 from app.feedback import (
     OutcomeRequest,
-    build_candidate_insights,
     build_outcome_history,
 )
+from app.reporting import candidate_insights_v2
 from app.repositories import (
     create_application_outcome,
     list_application_outcomes,
@@ -58,7 +58,7 @@ def get_candidate_insights(
     user: dict = Depends(current_user),
 ) -> dict:
     return run_database_operation(
-        lambda connection: build_candidate_insights(
+        lambda connection: candidate_insights_v2(
             list_application_outcomes(connection, candidate_id, user["id"])
         )
     )
