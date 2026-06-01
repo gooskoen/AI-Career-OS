@@ -1,0 +1,90 @@
+# Copyright 2026 AI-Career-OS contributors
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ai_career_os
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      AUTH_SECRET: ${AUTH_SECRET}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8000:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "python - <<'PY'\nimport urllib.request\nurllib.request.urlopen('http://localhost:8000/health', timeout=3)\nPY"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ai_career_os
+
+  migrations:
+    profiles: ["tools"]
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: "no"
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      AUTH_SECRET: ${AUTH_SECRET}
+    volumes:
+      - ./alembic.ini:/app/alembic.ini:ro
+      - ./migrations:/app/migrations:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["alembic", "upgrade", "head"]
+    networks:
+      - ai_career_os
+
+  frontend:
+    image: node:22-alpine
+    restart: unless-stopped
+    working_dir: /app
+    environment:
+      VITE_API_BASE_URL: ${FRONTEND_API_BASE_URL}
+    volumes:
+      - ./frontend:/app
+    command: sh -c "npm ci && npm run build && npx vite preview --host 0.0.0.0 --port 3000"
+    depends_on:
+      - backend
+    ports:
+      - "3000:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000 >/dev/null 2>&1"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ai_career_os
+
+volumes:
+  postgres_data:
+
+networks:
+  ai_career_os:
+    driver: bridge
