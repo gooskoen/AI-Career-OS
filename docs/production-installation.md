@@ -125,6 +125,7 @@ Expected services:
 
 - `postgres`
 - `backend`
+- `migrations`
 - `frontend`
 
 Expected production characteristics:
@@ -134,7 +135,16 @@ Expected production characteristics:
 - healthchecks
 - internal Docker network
 - frontend public port
-- backend internal API port
+- backend API port bound to localhost by default
+- one-shot migration runner with Alembic files mounted from the repository
+
+The example binds the backend to `127.0.0.1:8000:8000`. This is intentional for
+reverse proxy deployments. If you change it to `8000:8000`, firewall port `8000`
+so the backend is not exposed directly to the public internet.
+
+The `migrations` service is placed behind the `tools` profile, so it does not run
+as a long-lived service during normal `up`. It runs only when you explicitly call
+the documented migration command.
 
 Build and start:
 
@@ -169,22 +179,40 @@ The backend uses:
 Run migrations after containers are up:
 
 ```bash
-docker compose --env-file .env.production -f docker-compose.prod.yml exec backend alembic upgrade head
+docker compose --env-file .env.production -f docker-compose.prod.yml run --rm migrations alembic upgrade head
 ```
 
 Verify migration head:
 
 ```bash
-docker compose --env-file .env.production -f docker-compose.prod.yml exec backend alembic heads
+docker compose --env-file .env.production -f docker-compose.prod.yml run --rm migrations alembic heads
 ```
 
 The output should show the latest migration head.
+
+The production compose file uses a one-shot `migrations` service. It builds from
+the backend image and mounts `alembic.ini` plus the `migrations/` directory into
+the container, so the documented Alembic command has access to the migration
+configuration and scripts.
+
+Before every production migration:
+
+1. Take a PostgreSQL backup.
+2. Confirm the backup file exists and is non-empty.
+3. Run `alembic upgrade head`.
+4. Run the smoke test checklist.
+
+Rollback warning:
+
+- Alembic downgrade is not assumed safe for production.
+- Take a backup before every migration.
+- If a migration fails after changing data, restoring from backup may be required.
 
 If migrations fail:
 
 1. Check `DATABASE_URL`.
 2. Check PostgreSQL container health.
-3. Check backend logs.
+3. Check migration runner logs.
 4. Do not delete the database volume unless you intentionally want to remove all data.
 
 ## 6. Backend Deployment
@@ -219,12 +247,19 @@ Common backend errors:
 
 - Missing `AUTH_SECRET`: set `AUTH_SECRET` in `.env.production`.
 - Database connection failed: check `DATABASE_URL` and PostgreSQL health.
-- Migration missing: run `alembic upgrade head`.
+- Migration missing: run the documented `migrations` service command.
 - Port conflict: change host port mapping or stop the process using the port.
+- Backend reachable publicly on `8000`: bind to `127.0.0.1:8000:8000` or firewall it.
 
 ## 7. Frontend Deployment
 
 The frontend is a static React app built with Vite.
+
+The provided compose file serves it with `vite preview`. That is suitable for a
+controlled private beta or simple single-server validation, but it is not the
+recommended hardened production static server. For broader production use, build
+the frontend once and serve `frontend/dist` with Nginx, Caddy, or a managed static
+hosting service.
 
 Build through Docker Compose:
 
@@ -370,16 +405,52 @@ The most important data lives in PostgreSQL.
 Back up PostgreSQL:
 
 ```bash
-docker compose --env-file .env.production -f docker-compose.prod.yml exec postgres \
-  pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB" > ai-career-os-backup.sql
+docker compose --env-file .env.production -f docker-compose.prod.yml exec -T postgres \
+  sh -c 'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"' > ai-career-os-backup.sql
 ```
+
+Verify the backup file:
+
+```bash
+ls -lh ai-career-os-backup.sql
+```
+
+Do not continue with an upgrade or restore if the backup file is missing or
+empty.
 
 Restore PostgreSQL:
 
+1. Take an emergency backup of the current database before overwriting it:
+
 ```bash
-cat ai-career-os-backup.sql | docker compose --env-file .env.production -f docker-compose.prod.yml exec -T postgres \
-  psql -U "$POSTGRES_USER" "$POSTGRES_DB"
+docker compose --env-file .env.production -f docker-compose.prod.yml exec -T postgres \
+  sh -c 'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"' > ai-career-os-before-restore.sql
 ```
+
+2. Restore the selected backup:
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml exec -T postgres \
+  sh -c 'psql -U "$POSTGRES_USER" "$POSTGRES_DB"' < ai-career-os-backup.sql
+```
+
+3. Run migrations in case the restored dump is behind the current application:
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml run --rm migrations alembic upgrade head
+```
+
+4. Restart application services:
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml restart backend frontend
+```
+
+5. Run the restore smoke test:
+
+- Log in with a known user.
+- Confirm the dashboard loads.
+- Confirm the application list or Kanban board loads.
 
 Also back up:
 
@@ -402,25 +473,39 @@ git checkout main
 git pull --ff-only origin main
 ```
 
-4. Rebuild containers:
+4. Back up PostgreSQL:
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml exec -T postgres \
+  sh -c 'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"' > ai-career-os-before-upgrade.sql
+```
+
+5. Rebuild containers:
 
 ```bash
 docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build
 ```
 
-5. Run migrations:
+6. Run migrations:
 
 ```bash
-docker compose --env-file .env.production -f docker-compose.prod.yml exec backend alembic upgrade head
+docker compose --env-file .env.production -f docker-compose.prod.yml run --rm migrations alembic upgrade head
 ```
 
-6. Restart services:
+7. Restart services:
 
 ```bash
 docker compose --env-file .env.production -f docker-compose.prod.yml restart
 ```
 
-7. Run smoke tests.
+8. Run smoke tests.
+
+Rollback warning:
+
+- Do not assume `alembic downgrade` is safe.
+- If an upgrade fails after applying migrations, restore from
+  `ai-career-os-before-upgrade.sql` or another verified backup.
+- Keep the backup until the upgraded system has passed smoke testing.
 
 ## 12. Smoke Test Checklist
 
@@ -475,7 +560,14 @@ Symptom:
 Fix:
 
 - Confirm database is reachable.
-- Check current migration state.
+- Use the `migrations` service from `docker-compose.prod.yml`.
+- Confirm `alembic.ini` and `migrations/` exist in the repository directory.
+- Check current migration state:
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml run --rm migrations alembic current
+```
+
 - Review migration logs.
 - Back up before manual fixes.
 
@@ -549,6 +641,8 @@ Production safety checklist:
 - Use HTTPS.
 - Protect the database.
 - Do not expose PostgreSQL publicly.
+- Do not expose the backend directly when using a reverse proxy; bind it to
+  `127.0.0.1` or firewall port `8000`.
 - Back up regularly.
 - Store `.env.production` securely.
 - Restrict server SSH access.
