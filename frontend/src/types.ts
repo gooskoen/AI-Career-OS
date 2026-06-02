@@ -84,6 +84,57 @@ export interface CandidateProfile {
   target_roles?: string[];
   skills?: string[];
   experience_highlights?: string[];
+  portfolio_links?: string[];
+}
+
+export interface JobRecord {
+  id: string;
+  title: string;
+  company: string;
+  location?: string | null;
+  description: string;
+  required_skills: string[];
+  nice_to_have_skills: string[];
+  source?: string | null;
+  source_url?: string | null;
+  external_id?: string | null;
+}
+
+export interface JobImportResult {
+  job: JobRecord;
+  duplicate: boolean;
+  match?: { id: string } | null;
+}
+
+export interface MatchStrength {
+  skill: string;
+  contribution?: number;
+  reason?: string;
+  evidence?: string[];
+}
+
+export interface MatchResult {
+  id?: string;
+  score: number;
+  matched_skills?: string[];
+  missing_skills?: string[];
+  strengths?: MatchStrength[];
+  gaps?: {
+    critical?: string[];
+    moderate?: string[];
+    optional?: string[];
+  };
+  recommended_actions?: string[];
+  recommendation?: string;
+}
+
+export interface ApplicationPackage {
+  tailored_summary: string;
+  cover_letter: string;
+  talking_points: string[];
+  key_strengths: string[];
+  risk_gaps: string[];
+  recommended_cv_edits: string[];
 }
 
 export interface ApplicationRecord {
