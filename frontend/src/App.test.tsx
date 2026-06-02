@@ -81,8 +81,8 @@ const job = {
   company: "ExampleTech",
   location: "Remote",
   description: "Lead workflow automation, reporting, analytics, and stakeholder delivery.",
-  required_skills: ["Python", "SQL", "workflow automation"],
-  nice_to_have_skills: ["BPMN"]
+  required_skills: null,
+  nice_to_have_skills: null
 };
 
 const match = {
@@ -194,6 +194,8 @@ describe("App", () => {
     expect(lastMatchPayload.candidate.name).toBe("Koen Demo");
     expect(lastMatchPayload.candidate.display_name).toBeUndefined();
     expect(lastMatchPayload.job.title).toBe("AI Operations Lead");
+    expect(lastMatchPayload.job.required_skills).toEqual([]);
+    expect(lastMatchPayload.job.nice_to_have_skills).toEqual([]);
     expect(screen.getByText("Python")).toBeInTheDocument();
     expect(screen.getByText("BPMN")).toBeInTheDocument();
     expect(screen.getByText("Add BPMN Modelling Project To CV")).toBeInTheDocument();

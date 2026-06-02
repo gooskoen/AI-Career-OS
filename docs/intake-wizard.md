@@ -67,6 +67,11 @@ The frontend normalizes the saved candidate response before calling `/match`
 because persisted candidate records use `display_name`, while the matching
 contract expects `candidate.name`.
 
+The frontend also normalizes imported job responses before calling `/match`.
+Imported jobs can omit optional skill arrays or return them as `null`; the
+matching contract expects `required_skills` and `nice_to_have_skills` to be
+arrays, so the wizard sends empty arrays when no skills are present.
+
 ## Candidate Intake
 
 The candidate form captures:

@@ -366,8 +366,9 @@ Fix applied:
 
 - Normalize the candidate payload before calling `/match`.
 - Map `display_name` to `name`.
-- Preserve the imported job object and send it as the existing `JobDescription`
-  payload.
+- Normalize the imported job payload before calling `/match`.
+- Send `required_skills` and `nice_to_have_skills` as arrays, using empty arrays
+  when imported job responses omit them or return `null`.
 - Improve frontend validation error display so backend details such as
   `candidate.name: Field required` are shown when available.
 

@@ -116,6 +116,21 @@ function candidatePayload(candidate: CandidateProfile): CandidateProfile {
   };
 }
 
+function jobPayload(job: JobRecord): JobRecord {
+  return {
+    id: job.id,
+    title: job.title ?? "",
+    company: job.company ?? "",
+    location: job.location ?? null,
+    description: job.description ?? "",
+    required_skills: job.required_skills ?? [],
+    nice_to_have_skills: job.nice_to_have_skills ?? [],
+    source: job.source ?? null,
+    source_url: job.source_url ?? null,
+    external_id: job.external_id ?? null
+  };
+}
+
 export const api = {
   async register(email: string, displayName: string, password: string) {
     const session = await request<AuthResponse>("/auth/register", {
@@ -237,7 +252,7 @@ export const api = {
   previewMatch(candidate: CandidateProfile, job: JobRecord) {
     return request<MatchResult>("/match", {
       method: "POST",
-      body: JSON.stringify({ candidate: candidatePayload(candidate), job })
+      body: JSON.stringify({ candidate: candidatePayload(candidate), job: jobPayload(job) })
     });
   },
 
@@ -256,7 +271,7 @@ export const api = {
       method: "POST",
       body: JSON.stringify({
         candidate: candidatePayload(candidate),
-        job,
+        job: jobPayload(job),
         match_result: matchResult
       })
     });

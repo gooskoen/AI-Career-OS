@@ -93,8 +93,8 @@ export interface JobRecord {
   company: string;
   location?: string | null;
   description: string;
-  required_skills: string[];
-  nice_to_have_skills: string[];
+  required_skills?: string[] | null;
+  nice_to_have_skills?: string[] | null;
   source?: string | null;
   source_url?: string | null;
   external_id?: string | null;
