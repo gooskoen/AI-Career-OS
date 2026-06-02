@@ -2,6 +2,10 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { App } from "./App";
 
+let packageFailure = false;
+let matchValidationFailure = false;
+let lastMatchPayload: any = null;
+
 const dashboard = {
   active_applications: 3,
   interviews_scheduled: 1,
@@ -60,8 +64,63 @@ const summary = {
   status_history: [{ new_status: "drafted" }]
 };
 
+const candidate = {
+  id: "candidate-1",
+  display_name: "Koen Demo",
+  headline: "AI Operations Lead",
+  location: "Belgium",
+  summary: "Builds practical AI operating systems.",
+  skills: ["Python", "SQL", "workflow automation"],
+  target_roles: ["AI Operations Lead"],
+  experience_highlights: ["Led workflow automation delivery."]
+};
+
+const job = {
+  id: "job-1",
+  title: "AI Operations Lead",
+  company: "ExampleTech",
+  location: "Remote",
+  description: "Lead workflow automation, reporting, analytics, and stakeholder delivery.",
+  required_skills: ["Python", "SQL", "workflow automation"],
+  nice_to_have_skills: ["BPMN"]
+};
+
+const match = {
+  id: "match-1",
+  score: 86,
+  matched_skills: ["Python", "SQL", "workflow automation"],
+  missing_skills: ["BPMN"],
+  strengths: [
+    {
+      skill: "Python",
+      contribution: 30,
+      reason: "Required skill match",
+      evidence: ["Python"]
+    }
+  ],
+  gaps: {
+    critical: [],
+    moderate: ["BPMN"],
+    optional: []
+  },
+  recommended_actions: ["Add BPMN modelling project to CV"],
+  recommendation: "Strong fit with a focused BPMN proof point."
+};
+
+const applicationPackage = {
+  tailored_summary: "Tailored summary for AI Operations Lead.",
+  cover_letter: "Short cover letter draft.",
+  talking_points: ["Automation delivery", "Reporting discipline"],
+  key_strengths: ["Python", "workflow automation"],
+  risk_gaps: ["BPMN"],
+  recommended_cv_edits: ["Add BPMN modelling project to CV"]
+};
+
 describe("App", () => {
   beforeEach(() => {
+    packageFailure = false;
+    matchValidationFailure = false;
+    lastMatchPayload = null;
     sessionStorage.clear();
     vi.stubGlobal("fetch", vi.fn(mockFetch));
   });
@@ -71,7 +130,7 @@ describe("App", () => {
     vi.unstubAllGlobals();
   });
 
-  test("logs in and renders the dashboard", async () => {
+  test("logs in and renders the dashboard intake wizard", async () => {
     render(<App />);
 
     const loginButtons = screen.getAllByRole("button", { name: "Login" });
@@ -80,7 +139,7 @@ describe("App", () => {
     expect(await screen.findByText("Active Applications")).toBeInTheDocument();
     expect(await screen.findByText("Funnel Summary")).toBeInTheDocument();
     expect(await screen.findByText("Pipeline Totals")).toBeInTheDocument();
-    expect(await screen.findByText("Beta Workflow Validation")).toBeInTheDocument();
+    expect(await screen.findByText("User Intake Wizard")).toBeInTheDocument();
   });
 
   test("protects app routes until authentication succeeds", () => {
@@ -88,6 +147,101 @@ describe("App", () => {
 
     expect(screen.getAllByRole("button", { name: "Login" })).toHaveLength(2);
     expect(screen.queryByText("Dashboard")).not.toBeInTheDocument();
+  });
+
+  test("creates a candidate through the intake form", async () => {
+    renderAuthenticatedApp();
+
+    await createCandidateFromWizard();
+
+    expect(await screen.findByText("candidate saved")).toBeInTheDocument();
+    expect(screen.getByText("Candidate ready: Koen Demo")).toBeInTheDocument();
+  });
+
+  test("imports a pasted job description through existing job intake", async () => {
+    renderAuthenticatedApp();
+
+    await createCandidateFromWizard();
+    await importTextJobFromWizard();
+
+    expect(await screen.findByText("job imported")).toBeInTheDocument();
+    expect(screen.getAllByText("AI Operations Lead").length).toBeGreaterThan(1);
+    expect(screen.getByText("ExampleTech")).toBeInTheDocument();
+  });
+
+  test("imports a job URL through existing job intake", async () => {
+    renderAuthenticatedApp();
+
+    await createCandidateFromWizard();
+    fireEvent.click(await screen.findByRole("button", { name: "Paste URL" }));
+    fireEvent.change(screen.getByLabelText("Job URL"), {
+      target: { value: "https://example.com/jobs/ai-operations-lead" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Import Job" }));
+
+    expect(await screen.findByText("job imported")).toBeInTheDocument();
+    expect(screen.getByText("ExampleTech")).toBeInTheDocument();
+  });
+
+  test("generates and displays a readable match review", async () => {
+    renderAuthenticatedApp();
+
+    await createCandidateFromWizard();
+    await importTextJobFromWizard();
+    fireEvent.click(screen.getByRole("button", { name: "Generate Match" }));
+
+    expect(await screen.findByText("86% match")).toBeInTheDocument();
+    expect(lastMatchPayload.candidate.name).toBe("Koen Demo");
+    expect(lastMatchPayload.candidate.display_name).toBeUndefined();
+    expect(lastMatchPayload.job.title).toBe("AI Operations Lead");
+    expect(screen.getByText("Python")).toBeInTheDocument();
+    expect(screen.getByText("BPMN")).toBeInTheDocument();
+    expect(screen.getByText("Add BPMN Modelling Project To CV")).toBeInTheDocument();
+  });
+
+  test("shows backend validation details when match payload is rejected", async () => {
+    matchValidationFailure = true;
+    renderAuthenticatedApp();
+
+    await createCandidateFromWizard();
+    await importTextJobFromWizard();
+    fireEvent.click(screen.getByRole("button", { name: "Generate Match" }));
+
+    expect(
+      await screen.findByText("Request validation failed: candidate.name: Field required")
+    ).toBeInTheDocument();
+  });
+
+  test("progresses from intake to application creation", async () => {
+    renderAuthenticatedApp();
+
+    await createCandidateFromWizard();
+    await importTextJobFromWizard();
+    fireEvent.click(screen.getByRole("button", { name: "Generate Match" }));
+    expect(await screen.findByText("match generated")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Generate Package" }));
+    expect(await screen.findByText("package generated")).toBeInTheDocument();
+    expect(screen.getByText("Tailored summary for AI Operations Lead.")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Create Application" }));
+    expect(await screen.findByText("application created")).toBeInTheDocument();
+    expect(screen.getByText("Status: Drafted")).toBeInTheDocument();
+  });
+
+  test("shows useful API errors during wizard actions", async () => {
+    packageFailure = true;
+    renderAuthenticatedApp();
+
+    await createCandidateFromWizard();
+    await importTextJobFromWizard();
+    fireEvent.click(screen.getByRole("button", { name: "Generate Match" }));
+    expect(await screen.findByText("match generated")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Generate Package" }));
+
+    expect(await screen.findByText("Package service unavailable")).toBeInTheDocument();
+    expect(screen.queryByText("package generated")).not.toBeInTheDocument();
   });
 
   test("renders the kanban board and application detail", async () => {
@@ -113,47 +267,6 @@ describe("App", () => {
     expect(screen.getByText("Recommendation Analytics")).toBeInTheDocument();
   });
 
-  test("guided workflow marks Generate Package complete after package generation", async () => {
-    const { container } = renderAuthenticatedApp();
-
-    await runWorkflowThroughMatch();
-    fireEvent.click(screen.getByRole("button", { name: "Generate Package" }));
-
-    expect(await screen.findByText("package generated")).toBeInTheDocument();
-    expect(workflowChip(container, "Generate Package")).toHaveClass("done");
-  });
-
-  test("guided workflow marks View Insights complete after opening insights", async () => {
-    const { container } = renderAuthenticatedApp();
-
-    fireEvent.click(await screen.findByRole("button", { name: "View Insights" }));
-
-    expect(await screen.findByText("Outcome Analytics")).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: "Dashboard" }));
-
-    expect(await screen.findByText("Beta Workflow Validation")).toBeInTheDocument();
-    expect(workflowChip(container, "View Insights")).toHaveClass("done");
-  });
-
-  test("recording an outcome does not skip unresolved package or insights steps", async () => {
-    const { container } = renderAuthenticatedApp();
-
-    await runWorkflowThroughMatch();
-    fireEvent.click(screen.getByRole("button", { name: "Create Application" }));
-    expect(await screen.findByText("application created")).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: "Move To Applied" }));
-    expect(await screen.findByText("pipeline updated")).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: "Record Outcome" }));
-    expect(await screen.findByText("outcome recorded")).toBeInTheDocument();
-
-    expect(workflowChip(container, "Record Outcome")).toHaveClass("done");
-    expect(workflowChip(container, "Generate Package")).toHaveClass("todo");
-    expect(workflowChip(container, "View Insights")).toHaveClass("todo");
-  });
-
   test("logout returns to login screen", async () => {
     renderAuthenticatedApp();
 
@@ -165,6 +278,44 @@ describe("App", () => {
   });
 });
 
+async function createCandidateFromWizard() {
+  await screen.findByText("User Intake Wizard");
+  fireEvent.change(screen.getByLabelText("Full Name"), { target: { value: "Koen Demo" } });
+  fireEvent.change(screen.getByLabelText("Headline"), {
+    target: { value: "AI Operations Lead" }
+  });
+  fireEvent.change(screen.getByLabelText("Location"), { target: { value: "Belgium" } });
+  fireEvent.change(screen.getByLabelText("Summary"), {
+    target: { value: "Builds practical AI operating systems." }
+  });
+  fireEvent.change(screen.getByLabelText("Skills"), {
+    target: { value: "Python, SQL, workflow automation" }
+  });
+  fireEvent.change(screen.getByLabelText("Target Roles"), {
+    target: { value: "AI Operations Lead" }
+  });
+  fireEvent.change(screen.getByLabelText("Experience Highlights"), {
+    target: { value: "Led workflow automation delivery." }
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Save Candidate" }));
+  await screen.findByText("candidate saved");
+}
+
+async function importTextJobFromWizard() {
+  fireEvent.change(screen.getByLabelText("Job Description"), {
+    target: {
+      value: [
+        "AI Operations Lead",
+        "ExampleTech",
+        "Remote",
+        "Required skills: Python, SQL, workflow automation"
+      ].join("\n")
+    }
+  });
+  fireEvent.click(screen.getByRole("button", { name: "Import Job" }));
+  await screen.findByText("job imported");
+}
+
 function renderAuthenticatedApp() {
   sessionStorage.setItem("ai-career-os.access-token", "access");
   sessionStorage.setItem("ai-career-os.refresh-token", "refresh");
@@ -172,30 +323,12 @@ function renderAuthenticatedApp() {
     "ai-career-os.user",
     JSON.stringify({ id: "user-1", email: "demo@example.com", display_name: "Demo User" })
   );
-  return render(<App />);
-}
-
-async function runWorkflowThroughMatch() {
-  fireEvent.click(await screen.findByRole("button", { name: "Create Candidate" }));
-  expect(await screen.findByText("candidate created")).toBeInTheDocument();
-
-  fireEvent.click(screen.getByRole("button", { name: "Import Job" }));
-  expect(await screen.findByText("job imported")).toBeInTheDocument();
-
-  fireEvent.click(screen.getByRole("button", { name: "Review Match" }));
-  expect(await screen.findByText("match reviewed")).toBeInTheDocument();
-}
-
-function workflowChip(container: HTMLElement, label: string) {
-  const chip = Array.from(container.querySelectorAll(".workflow-steps span")).find(
-    (element) => element.textContent === label
-  );
-  expect(chip).toBeDefined();
-  return chip as HTMLElement;
+  render(<App />);
 }
 
 async function mockFetch(input: RequestInfo | URL, init?: RequestInit) {
   const url = String(input);
+  const method = init?.method ?? "GET";
   if (url.endsWith("/auth/login")) {
     return json({
       access_token: "access",
@@ -238,49 +371,37 @@ async function mockFetch(input: RequestInfo | URL, init?: RequestInit) {
   if (url.endsWith("/applications/drafted-application/summary")) {
     return json(summary);
   }
-  if (url.endsWith("/candidates")) {
-    if (init?.method === "POST") {
-      return json({
-        id: "candidate-1",
-        name: "Private Beta Candidate",
-        headline: "AI Operations and Reporting Specialist",
-        skills: ["Python"]
-      });
-    }
-    return json([{ display_name: "Demo Candidate", headline: "AI Operator", skills: ["Python"] }]);
+  if (url.endsWith("/candidates") && method === "POST") {
+    return json(candidate);
   }
-  if (url.endsWith("/jobs/import-text")) {
-    return json({
-      job: {
-        id: "job-1",
-        title: "AI Operations Lead",
-        company: "ExampleTech",
-        description: "Lead workflow automation.",
-        required_skills: ["Python"],
-        nice_to_have_skills: []
-      },
-      duplicate: false,
-      match: { id: "match-imported" }
-    });
+  if (url.endsWith("/candidates")) {
+    return json([candidate]);
+  }
+  if (url.endsWith("/jobs/import-text") || url.endsWith("/jobs/import-url")) {
+    return json({ job, duplicate: false, match: null });
+  }
+  if (url.endsWith("/match")) {
+    lastMatchPayload = JSON.parse(String(init?.body));
+    if (matchValidationFailure) {
+      return jsonError(
+        "Request validation failed",
+        422,
+        [{ loc: ["body", "candidate", "name"], msg: "Field required" }]
+      );
+    }
+    return json(match);
   }
   if (url.endsWith("/matches/persist")) {
-    return json({ id: "match-1", score: 86, strengths: ["Python"], gaps: [] });
+    return json(match);
   }
   if (url.endsWith("/applications/package")) {
-    return json({
-      tailored_summary: "Private beta package summary",
-      cover_letter: "Short cover letter",
-      talking_points: ["Workflow automation"]
-    });
+    if (packageFailure) {
+      return jsonError("Package service unavailable", 503);
+    }
+    return json(applicationPackage);
   }
-  if (url.endsWith("/applications")) {
+  if (url.endsWith("/applications") && method === "POST") {
     return json({ id: "application-1", status: "drafted", source: "private_beta_ui" });
-  }
-  if (url.endsWith("/applications/application-1/transition")) {
-    return json({ id: "application-1", status: "applied", source: "private_beta_ui" });
-  }
-  if (url.endsWith("/outcomes")) {
-    return json({ id: "outcome-1", outcome: "applied" });
   }
   return json({});
 }
@@ -289,6 +410,15 @@ function json(body: unknown) {
   return Promise.resolve(
     new Response(JSON.stringify(body), {
       status: 200,
+      headers: { "Content-Type": "application/json" }
+    })
+  );
+}
+
+function jsonError(message: string, status: number, details: unknown = null) {
+  return Promise.resolve(
+    new Response(JSON.stringify({ error: { message, details } }), {
+      status,
       headers: { "Content-Type": "application/json" }
     })
   );

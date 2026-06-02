@@ -32,6 +32,7 @@ CORS middleware/configuration for the split frontend/backend deployment.
 | PBAT-012 | High | Database Diagnostics | Resolved on VM, Diagnostics Retained | Direct backend registration initially returned `503 service_unavailable` / `Database operation failed`. | After the `DATABASE_URL` runtime fix, direct backend registration passed via curl on `career-beta`. | Server-side exception logging remains in this PR for future database operation failures while API responses stay generic. |
 | PBAT-013 | Medium | Guided Workflow UX | Fixed, Pending VM Re-Test | Guided beta workflow completion state did not mark `Generate Package` and `View Insights` complete. | The workflow reached `outcome recorded`, but those two chips/buttons remained grey/incomplete. | Fixed by wiring package success state, visible workflow errors, and a View Insights workflow action that marks the step complete. |
 | PBAT-014 | High | Production Sync | Resolved | `career-beta` has been updated far enough to serve the Sprint 14 User Intake Wizard. | Latest VM validation confirms User Intake Wizard is deployed. | Continue with PBAT-011 CORS fix/retest before full acceptance. |
+| PBAT-015 | High | Match Payload | Open | User Intake Wizard generated an invalid `/match` request payload. | Login, dashboard, candidate intake, and job text import passed on `career-beta`, but Generate Match returned `Request validation failed`. Backend `/match` expects `candidate.name`; the saved candidate object uses `display_name`. | Normalize the candidate payload before `/match` by mapping `display_name` to `name`, then re-test match score, strengths, gaps, and recommendations. |
 
 ## Critical Issues
 
@@ -47,6 +48,7 @@ None confirmed.
 - PBAT-011: CORS failure blocks browser API calls in split frontend/backend deployment.
 - PBAT-012: Direct auth registration initially returned 503, but now passes via curl after the runtime database fix.
 - PBAT-014: Production VM sync to Sprint 14 is resolved enough for User Intake Wizard validation.
+- PBAT-015: User Intake Wizard generated invalid match payload.
 
 PBAT-009 was a confirmed installation blocker and has been fixed in this PR. It
 was temporarily re-tested on `career-beta` by switching `DATABASE_URL` to
@@ -85,3 +87,5 @@ generation and insights viewing. It still needs committed-branch browser re-test
 8. Reassess `PRIVATE_BETA_READY`.
 9. Confirm browser API calls from the Sprint 14 User Intake Wizard receive
    `Access-Control-Allow-Origin` for the configured frontend origin.
+10. Confirm Generate Match succeeds and displays readable score, strengths,
+    gaps, and recommendations.

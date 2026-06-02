@@ -335,6 +335,48 @@ Retest status:
 PENDING VM RETEST
 ```
 
+## Real Docker User Intake Wizard Match Finding
+
+Observed workflow result on `career-beta` after Sprint 14:
+
+```text
+Login: PASS
+Dashboard: PASS
+Candidate intake: PASS
+Job text import: PASS
+Generate Match: FAIL
+```
+
+User-visible error:
+
+```text
+Request validation failed
+```
+
+Root cause:
+
+- The User Intake Wizard reached the backend successfully.
+- The backend `/match` endpoint expects `candidate.name` in a
+  `CandidateProfile` payload.
+- Persisted candidate records returned to the frontend use `display_name`.
+- The wizard sent the saved candidate object directly to `/match`, so the
+  request could omit the required `candidate.name` field.
+
+Fix applied:
+
+- Normalize the candidate payload before calling `/match`.
+- Map `display_name` to `name`.
+- Preserve the imported job object and send it as the existing `JobDescription`
+  payload.
+- Improve frontend validation error display so backend details such as
+  `candidate.name: Field required` are shown when available.
+
+Retest status:
+
+```text
+PENDING VM RETEST
+```
+
 ## Real Docker Direct Backend Auth Finding
 
 Exact direct backend result after the `DATABASE_URL` runtime fix:
@@ -376,8 +418,8 @@ PENDING VM RETEST
 | 1 | Installation | FAIL | Migration runner failed before fix with `ModuleNotFoundError: No module named 'psycopg2'` because production `DATABASE_URL` examples used bare `postgresql://`. Temporary VM retest with `postgresql+psycopg://...` allowed Alembic to start successfully. Frontend runtime returned `HTTP/1.1 200 OK`, but Docker marked the frontend container unhealthy because the healthcheck used a non-portable command. Frontend healthcheck was fixed locally and now passes on `career-beta`. | Re-run the full installation from the committed PR branch after the `postgresql+psycopg://`, frontend healthcheck, and CORS fixes. |
 | 2 | First User Registration | FAIL | Direct backend registration passed via curl after the `DATABASE_URL` runtime fix. Browser registration/login still failed with `Failed to fetch`; backend logs showed `OPTIONS /auth/register` and `OPTIONS /auth/login` returning `405`. | Re-run browser registration/login after setting `CORS_ORIGINS` and recreating backend from the committed branch. |
 | 3 | Candidate Creation | BLOCKED | Requires authenticated running app. | Run after login passes. |
-| 4 | Job Import | BLOCKED | Requires running backend/frontend. | Run after installation passes. |
-| 5 | Matching | BLOCKED | Requires candidate and job setup. | Run after candidate/job workflows pass. |
+| 4 | Job Import | PARTIAL PASS | Job text import passed on `career-beta`; job URL import still needs final acceptance evidence. | Re-run both text and URL import after CORS and match fixes are deployed. |
+| 5 | Matching | FAIL | Generate Match returned `Request validation failed` because the frontend sent a saved candidate object with `display_name` instead of the `/match` contract's required `candidate.name`. | Re-run after frontend match payload normalization is deployed. |
 | 6 | Application Package | BLOCKED | Requires match result and running app. | Run after matching passes. |
 | 7 | Application Lifecycle | FAIL | Guided workflow reached application creation, pipeline movement, and outcome recording, but `Generate Package` and `View Insights` chips remained incomplete. Backend workflow remained functional. | Re-run after frontend guided workflow state fix. |
 | 8 | Outcome Tracking | FAIL | UI displayed `outcome recorded`, but unresolved workflow steps stayed grey, making completion state misleading. | Re-run after frontend guided workflow state fix. |
@@ -422,6 +464,7 @@ Confirmed issues:
 | PBAT-012 | High | Database Diagnostics | Direct backend registration initially returned generic 503 before the runtime database fix; server-side diagnostics were improved for future failures. | After the `DATABASE_URL` runtime fix, direct backend registration passed via curl. |
 | PBAT-013 | Medium | Guided Workflow UX | Guided beta workflow completion state did not correctly mark `Generate Package` and `View Insights`. | Workflow executed through `outcome recorded`, but those two chips remained grey/incomplete. |
 | PBAT-014 | High | Production Sync | Resolved: `career-beta` now has the Sprint 14 User Intake Wizard deployed. | Latest VM validation confirms User Intake Wizard is deployed. Remaining blocker is PBAT-011 CORS. |
+| PBAT-015 | High | Match Payload | User Intake Wizard generated an invalid `/match` request payload. | Candidate intake and job text import passed, but Generate Match returned `Request validation failed`; root cause is saved candidate `display_name` not being mapped to required `candidate.name`. |
 
 ## Issues Encountered
 
@@ -434,6 +477,8 @@ Confirmed issues:
 - Guided beta workflow reached outcome recording, but completion state remained misleading for package and insights steps.
 - Sprint 14 User Intake Wizard is deployed on `career-beta`.
 - Browser API calls remain blocked by missing CORS middleware/configuration.
+- Candidate intake and job text import pass, but match generation fails until
+  the frontend normalizes the candidate payload for `/match`.
 - No screenshots were captured in this session because the app could not be started here.
 
 ## Workaround Notes
@@ -454,7 +499,9 @@ Use a clean VM/laptop for the real acceptance run:
 12. Confirm backend includes FastAPI `CORSMiddleware`.
 13. Rebuild/recreate backend and verify browser API calls include
     `Access-Control-Allow-Origin`.
-14. Record evidence for every scenario in this file.
+14. Re-run Generate Match and confirm readable score, strengths, gaps, and
+    recommendations render.
+15. Record evidence for every scenario in this file.
 
 ## Performance Results
 
@@ -515,8 +562,9 @@ Required follow-up:
 PRIVATE_BETA_READY = NO
 
 Reason: Sprint 14 is released and the User Intake Wizard is deployed on
-`career-beta`, but browser API calls are blocked by missing CORS
-middleware/configuration in the split frontend/backend deployment. No full
-clean-environment acceptance pass evidence exists yet.
+`career-beta`, but browser API calls were blocked by missing CORS
+middleware/configuration and Generate Match failed because the frontend sent an
+invalid `/match` candidate payload. No full clean-environment acceptance pass
+evidence exists yet.
 
 Recommendation: Do not declare `v1.0.0 Private Beta Release` until the clean-environment acceptance run passes the success criteria.

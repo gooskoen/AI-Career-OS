@@ -15,7 +15,8 @@ body {
 }
 
 button,
-input {
+input,
+textarea {
   font: inherit;
 }
 
@@ -91,10 +92,16 @@ label {
   font-weight: 700;
 }
 
-input {
+input,
+textarea {
   border: 1px solid #cbd5e1;
   border-radius: 6px;
   padding: 11px 12px;
+}
+
+textarea {
+  min-height: 86px;
+  resize: vertical;
 }
 
 .primary {
@@ -103,6 +110,16 @@ input {
   cursor: pointer;
   font-weight: 700;
   padding: 12px;
+}
+
+.primary.inline {
+  justify-self: start;
+  min-width: 150px;
+}
+
+.primary:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
 }
 
 .app-shell {
@@ -331,6 +348,72 @@ input {
 .workflow-actions button:disabled {
   color: #94a3b8;
   cursor: not-allowed;
+}
+
+.wizard-grid {
+  display: grid;
+  gap: 22px;
+  margin-top: 18px;
+}
+
+.wizard-section {
+  border-top: 1px solid #e2e8f0;
+  display: grid;
+  gap: 14px;
+  padding-top: 18px;
+}
+
+.wizard-section h3 {
+  font-size: 16px;
+  margin: 0;
+}
+
+.form-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.large-textarea {
+  min-height: 170px;
+}
+
+.segmented.compact {
+  max-width: 420px;
+}
+
+.result-box,
+.summary-stack {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.result-box span {
+  color: #64748b;
+}
+
+.result-box button {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  cursor: pointer;
+  justify-self: start;
+  padding: 9px 11px;
+}
+
+.score-badge {
+  align-items: center;
+  background: #dbeafe;
+  border-radius: 999px;
+  color: #1d4ed8;
+  display: inline-flex;
+  font-weight: 800;
+  justify-self: start;
+  padding: 8px 12px;
 }
 
 @media (max-width: 800px) {

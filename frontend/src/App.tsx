@@ -3,7 +3,6 @@ import { useEffect, useMemo, useState } from "react";
 import {
   BarChart3,
   BriefcaseBusiness,
-  ClipboardList,
   LayoutDashboard,
   LogOut,
   UserRound
@@ -11,11 +10,14 @@ import {
 import { api, getStoredUser, isAuthenticated } from "./api";
 import type {
   ApplicationBoard,
+  ApplicationPackage,
   ApplicationRecord,
   ApplicationSummary,
   CandidateProfile,
   DashboardReport,
   FunnelReport,
+  JobRecord,
+  MatchResult,
   OutcomeReport,
   PipelineStatus,
   RecommendationReport,
@@ -29,6 +31,27 @@ type WorkflowStep = {
   label: string;
   status: "todo" | "done";
 };
+type JobIntakeMode = "text" | "url";
+type IntakeWizardState = {
+  candidateForm: CandidateFormState;
+  jobMode: JobIntakeMode;
+  jobText: string;
+  jobUrl: string;
+  candidate: CandidateProfile | null;
+  job: JobRecord | null;
+  matchResult: MatchResult | null;
+  applicationPackage: ApplicationPackage | null;
+  application: ApplicationRecord | null;
+};
+type CandidateFormState = {
+  name: string;
+  headline: string;
+  location: string;
+  summary: string;
+  skills: string;
+  targetRoles: string;
+  experienceHighlights: string;
+};
 
 const statusLabels: Record<PipelineStatus, string> = {
   drafted: "Drafted",
@@ -41,6 +64,21 @@ const statusLabels: Record<PipelineStatus, string> = {
   rejected: "Rejected",
   withdrawn: "Withdrawn"
 };
+
+const INTAKE_WIZARD_STORAGE_KEY = "ai-career-os.intake-wizard";
+const defaultCandidateForm: CandidateFormState = {
+  name: "",
+  headline: "",
+  location: "",
+  summary: "",
+  skills: "",
+  targetRoles: "",
+  experienceHighlights: ""
+};
+const defaultJobText = [
+  "Paste a job description here.",
+  "Include title, company, location, responsibilities, required skills, and nice-to-have skills."
+].join("\n");
 
 export function App() {
   const [authed, setAuthed] = useState(isAuthenticated());
@@ -146,15 +184,6 @@ function Shell({
   onPageChange: (page: Page) => void;
   onLogout: () => void;
 }) {
-  const [insightsViewed, setInsightsViewed] = useState(page === "insights");
-
-  function changePage(nextPage: Page) {
-    if (nextPage === "insights") {
-      setInsightsViewed(true);
-    }
-    onPageChange(nextPage);
-  }
-
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -163,16 +192,16 @@ function Shell({
           <h2>Career cockpit</h2>
         </div>
         <nav>
-          <NavButton icon={<LayoutDashboard />} active={page === "dashboard"} onClick={() => changePage("dashboard")}>
+          <NavButton icon={<LayoutDashboard />} active={page === "dashboard"} onClick={() => onPageChange("dashboard")}>
             Dashboard
           </NavButton>
-          <NavButton icon={<BriefcaseBusiness />} active={page === "applications"} onClick={() => changePage("applications")}>
+          <NavButton icon={<BriefcaseBusiness />} active={page === "applications"} onClick={() => onPageChange("applications")}>
             Applications
           </NavButton>
-          <NavButton icon={<BarChart3 />} active={page === "insights"} onClick={() => changePage("insights")}>
+          <NavButton icon={<BarChart3 />} active={page === "insights"} onClick={() => onPageChange("insights")}>
             Insights
           </NavButton>
-          <NavButton icon={<UserRound />} active={page === "profile"} onClick={() => changePage("profile")}>
+          <NavButton icon={<UserRound />} active={page === "profile"} onClick={() => onPageChange("profile")}>
             Profile
           </NavButton>
         </nav>
@@ -182,12 +211,7 @@ function Shell({
         </button>
       </aside>
       <main className="content">
-        {page === "dashboard" && (
-          <DashboardPage
-            insightsViewed={insightsViewed}
-            onViewInsights={() => changePage("insights")}
-          />
-        )}
+        {page === "dashboard" && <DashboardPage onOpenApplications={() => onPageChange("applications")} />}
         {page === "applications" && <ApplicationsPage />}
         {page === "insights" && <InsightsPage />}
         {page === "profile" && <ProfilePage />}
@@ -215,13 +239,7 @@ function NavButton({
   );
 }
 
-function DashboardPage({
-  insightsViewed,
-  onViewInsights
-}: {
-  insightsViewed: boolean;
-  onViewInsights: () => void;
-}) {
+function DashboardPage({ onOpenApplications }: { onOpenApplications: () => void }) {
   const { data: dashboard, error } = useResource(api.dashboard);
   const { data: funnel } = useResource(api.funnel);
 
@@ -249,114 +267,186 @@ function DashboardPage({
           ))}
         </div>
       </Panel>
-      <BetaWorkflow insightsViewed={insightsViewed} onViewInsights={onViewInsights} />
+      <IntakeWizard onOpenApplications={onOpenApplications} />
     </section>
   );
 }
 
-function BetaWorkflow({
-  insightsViewed,
-  onViewInsights
-}: {
-  insightsViewed: boolean;
-  onViewInsights: () => void;
-}) {
-  const [candidate, setCandidate] = useState<CandidateProfile | null>(null);
-  const [job, setJob] = useState<unknown>(null);
-  const [matchResult, setMatchResult] = useState<unknown>(null);
-  const [application, setApplication] = useState<ApplicationRecord | null>(null);
-  const [packageGenerated, setPackageGenerated] = useState(false);
-  const [outcomeRecorded, setOutcomeRecorded] = useState(false);
+function IntakeWizard({ onOpenApplications }: { onOpenApplications: () => void }) {
+  const saved = loadIntakeWizardState();
+  const [candidateForm, setCandidateForm] = useState<CandidateFormState>(
+    saved?.candidateForm ?? defaultCandidateForm
+  );
+  const [jobMode, setJobMode] = useState<JobIntakeMode>(saved?.jobMode ?? "text");
+  const [jobText, setJobText] = useState(saved?.jobText ?? defaultJobText);
+  const [jobUrl, setJobUrl] = useState(saved?.jobUrl ?? "");
+  const [candidate, setCandidate] = useState<CandidateProfile | null>(saved?.candidate ?? null);
+  const [job, setJob] = useState<JobRecord | null>(saved?.job ?? null);
+  const [matchResult, setMatchResult] = useState<MatchResult | null>(saved?.matchResult ?? null);
+  const [applicationPackage, setApplicationPackage] =
+    useState<ApplicationPackage | null>(saved?.applicationPackage ?? null);
+  const [application, setApplication] = useState<ApplicationRecord | null>(
+    saved?.application ?? null
+  );
+  const [loading, setLoading] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
   const candidateId = candidate?.id;
-  const jobId = typeof job === "object" && job && "id" in job ? String(job.id) : "";
-  const matchId =
-    typeof matchResult === "object" && matchResult && "id" in matchResult
-      ? String(matchResult.id)
-      : "";
+  const jobId = job?.id ?? "";
+  const matchId = matchResult?.id ?? "";
 
   const steps: WorkflowStep[] = [
-    { label: "Register", status: "done" },
-    { label: "Login", status: "done" },
-    { label: "Create Candidate", status: candidate ? "done" : "todo" },
-    { label: "Import Job", status: job ? "done" : "todo" },
-    { label: "Review Match", status: matchResult ? "done" : "todo" },
-    { label: "Generate Package", status: packageGenerated ? "done" : "todo" },
-    { label: "Create Application", status: application ? "done" : "todo" },
-    { label: "Move Through Pipeline", status: application?.status === "applied" ? "done" : "todo" },
-    { label: "Record Outcome", status: outcomeRecorded ? "done" : "todo" },
-    { label: "View Insights", status: insightsViewed ? "done" : "todo" }
+    { label: "Candidate", status: candidate ? "done" : "todo" },
+    { label: "Job", status: job ? "done" : "todo" },
+    { label: "Match", status: matchResult ? "done" : "todo" },
+    { label: "Package", status: applicationPackage ? "done" : "todo" },
+    { label: "Application", status: application ? "done" : "todo" }
   ];
 
-  async function runStep(step: string) {
+  useEffect(() => {
+    sessionStorage.setItem(
+      INTAKE_WIZARD_STORAGE_KEY,
+      JSON.stringify({
+        candidateForm,
+        jobMode,
+        jobText,
+        jobUrl,
+        candidate,
+        job,
+        matchResult,
+        applicationPackage,
+        application
+      })
+    );
+  }, [
+    candidateForm,
+    jobMode,
+    jobText,
+    jobUrl,
+    candidate,
+    job,
+    matchResult,
+    applicationPackage,
+    application
+  ]);
+
+  async function runWizardAction(action: string, operation: () => Promise<void>) {
     setMessage("");
     setError("");
+    setLoading(action);
     try {
-      if (step === "candidate") {
-        const created = await api.createCandidate({
-          name: "Private Beta Candidate",
-          headline: "AI Operations and Reporting Specialist",
-          location: "Remote",
-          summary: "Builds workflow automation, reporting, and application systems.",
-          target_roles: ["AI Operations Lead"],
-          skills: ["Python", "SQL", "workflow automation", "reporting"],
-          experience_highlights: ["Built reporting workflows for operations teams."]
-        });
-        setCandidate(created);
-        setMessage("candidate created");
-      }
-      if (step === "job" && candidateId) {
-        const imported = await api.importJob(
-          [
-            "AI Operations Lead",
-            "ExampleTech",
-            "Remote",
-            "Lead workflow automation, reporting, analytics, and stakeholder delivery.",
-            "Required skills: Python, SQL, workflow automation, reporting"
-          ].join("\n"),
-          candidateId
-        );
-        setJob(imported.job);
-        setMatchResult(imported.match ?? null);
-        setMessage("job imported");
-      }
-      if (step === "match" && candidateId && jobId) {
-        const created = await api.createMatch(candidateId, jobId);
-        setMatchResult(created);
-        setMessage("match reviewed");
-      }
-      if (step === "package" && candidate && job && matchResult) {
-        await api.generatePackage(candidate, job, matchResult);
-        setPackageGenerated(true);
-        setMessage("package generated");
-      }
-      if (step === "application" && candidateId && jobId) {
-        const created = await api.createApplication(candidateId, jobId, matchId || undefined);
-        setApplication(created);
-        setMessage("application created");
-      }
-      if (step === "pipeline" && application) {
-        const updated = (await api.transitionApplication(application.id, "applied")) as ApplicationRecord;
-        setApplication({ ...application, ...updated, status: "applied" });
-        setMessage("pipeline updated");
-      }
-      if (step === "outcome" && candidateId && jobId && application) {
-        await api.recordOutcome(candidateId, jobId, application.id);
-        setOutcomeRecorded(true);
-        setMessage("outcome recorded");
-      }
+      await operation();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Workflow step failed");
+      setError(caught instanceof Error ? caught.message : "Wizard action failed");
+    } finally {
+      setLoading("");
     }
   }
 
+  function updateCandidateField(field: keyof CandidateFormState, value: string) {
+    setCandidateForm((current) => ({ ...current, [field]: value }));
+  }
+
+  function resetDownstream(from: "candidate" | "job" | "match" | "package") {
+    if (from === "candidate") {
+      setJob(null);
+    }
+    if (from === "candidate" || from === "job") {
+      setMatchResult(null);
+    }
+    if (from === "candidate" || from === "job" || from === "match") {
+      setApplicationPackage(null);
+    }
+    if (from !== "package") {
+      setApplication(null);
+    }
+  }
+
+  function candidateFromForm(): CandidateProfile {
+    return {
+      name: required(candidateForm.name, "Full Name"),
+      headline: required(candidateForm.headline, "Headline"),
+      location: required(candidateForm.location, "Location"),
+      summary: required(candidateForm.summary, "Summary"),
+      skills: requiredList(candidateForm.skills, "Skills"),
+      target_roles: requiredList(candidateForm.targetRoles, "Target Roles"),
+      experience_highlights: requiredList(
+        candidateForm.experienceHighlights,
+        "Experience Highlights"
+      ),
+      portfolio_links: []
+    };
+  }
+
+  async function saveCandidate() {
+    await runWizardAction("candidate", async () => {
+      const created = await api.createCandidate(candidateFromForm());
+      setCandidate(created);
+      resetDownstream("candidate");
+      setMessage("candidate saved");
+    });
+  }
+
+  async function importJob() {
+    await runWizardAction("job", async () => {
+      if (!candidateId) {
+        throw new Error("Save candidate before importing a job.");
+      }
+      const imported =
+        jobMode === "text"
+          ? await api.importJobText(required(jobText, "Job Description"), candidateId)
+          : await api.importJobUrl(required(jobUrl, "Job URL"), candidateId);
+      setJob(imported.job);
+      setMatchResult(null);
+      setApplicationPackage(null);
+      setApplication(null);
+      setMessage(imported.duplicate ? "existing job loaded" : "job imported");
+    });
+  }
+
+  async function generateMatch() {
+    await runWizardAction("match", async () => {
+      if (!candidate || !candidateId || !job || !jobId) {
+        throw new Error("Save candidate and import a job before generating a match.");
+      }
+      const preview = await api.previewMatch(candidate, job);
+      const persisted = await api.createMatch(candidateId, jobId);
+      setMatchResult({ ...preview, id: persisted.id });
+      setApplicationPackage(null);
+      setApplication(null);
+      setMessage("match generated");
+    });
+  }
+
+  async function generatePackage() {
+    await runWizardAction("package", async () => {
+      if (!candidate || !job || !matchResult) {
+        throw new Error("Generate a match before creating an application package.");
+      }
+      const generated = await api.generatePackage(candidate, job, matchResult);
+      setApplicationPackage(generated);
+      setApplication(null);
+      setMessage("package generated");
+    });
+  }
+
+  async function createApplication() {
+    await runWizardAction("application", async () => {
+      if (!candidateId || !jobId || !matchId) {
+        throw new Error("Generate a persisted match before creating an application.");
+      }
+      const created = await api.createApplication(candidateId, jobId, matchId);
+      setApplication(created);
+      setMessage("application created");
+    });
+  }
+
   return (
-    <Panel title="Beta Workflow Validation">
+    <Panel title="User Intake Wizard">
       <p className="muted">
-        Guided API-first workflow for private beta validation. Each action calls an
-        existing backend endpoint.
+        Create a real candidate profile, import a real vacancy, review the match,
+        generate an application package, and create an application using existing APIs.
       </p>
       <div className="workflow-steps">
         {steps.map((step) => (
@@ -365,32 +455,222 @@ function BetaWorkflow({
           </span>
         ))}
       </div>
-      <div className="workflow-actions">
-        <button onClick={() => runStep("candidate")}>Create Candidate</button>
-        <button disabled={!candidateId} onClick={() => runStep("job")}>
-          Import Job
-        </button>
-        <button disabled={!candidateId || !jobId} onClick={() => runStep("match")}>
-          Review Match
-        </button>
-        <button disabled={!candidate || !job || !matchResult} onClick={() => runStep("package")}>
-          Generate Package
-        </button>
-        <button disabled={!candidateId || !jobId} onClick={() => runStep("application")}>
-          Create Application
-        </button>
-        <button disabled={!application} onClick={() => runStep("pipeline")}>
-          Move To Applied
-        </button>
-        <button disabled={!application || !candidateId || !jobId} onClick={() => runStep("outcome")}>
-          Record Outcome
-        </button>
-        <button onClick={onViewInsights}>View Insights</button>
+
+      <div className="wizard-grid">
+        <section className="wizard-section">
+          <h3>Candidate</h3>
+          <div className="form-grid">
+            <label>
+              Full Name
+              <input
+                value={candidateForm.name}
+                onChange={(event) => updateCandidateField("name", event.target.value)}
+              />
+            </label>
+            <label>
+              Headline
+              <input
+                value={candidateForm.headline}
+                onChange={(event) => updateCandidateField("headline", event.target.value)}
+              />
+            </label>
+            <label>
+              Location
+              <input
+                value={candidateForm.location}
+                onChange={(event) => updateCandidateField("location", event.target.value)}
+              />
+            </label>
+          </div>
+          <label>
+            Summary
+            <textarea
+              value={candidateForm.summary}
+              onChange={(event) => updateCandidateField("summary", event.target.value)}
+            />
+          </label>
+          <div className="form-grid">
+            <label>
+              Skills
+              <textarea
+                value={candidateForm.skills}
+                onChange={(event) => updateCandidateField("skills", event.target.value)}
+              />
+            </label>
+            <label>
+              Target Roles
+              <textarea
+                value={candidateForm.targetRoles}
+                onChange={(event) => updateCandidateField("targetRoles", event.target.value)}
+              />
+            </label>
+            <label>
+              Experience Highlights
+              <textarea
+                value={candidateForm.experienceHighlights}
+                onChange={(event) =>
+                  updateCandidateField("experienceHighlights", event.target.value)
+                }
+              />
+            </label>
+          </div>
+          <button className="primary inline" disabled={loading === "candidate"} onClick={saveCandidate}>
+            {loading === "candidate" ? "Saving..." : "Save Candidate"}
+          </button>
+          {candidate && <p className="notice success">Candidate ready: {candidate.name ?? candidate.display_name}</p>}
+        </section>
+
+        <section className="wizard-section">
+          <h3>Job</h3>
+          <div className="segmented compact" role="tablist" aria-label="Job intake mode">
+            <button
+              type="button"
+              className={jobMode === "text" ? "active" : ""}
+              onClick={() => setJobMode("text")}
+            >
+              Paste Description
+            </button>
+            <button
+              type="button"
+              className={jobMode === "url" ? "active" : ""}
+              onClick={() => setJobMode("url")}
+            >
+              Paste URL
+            </button>
+          </div>
+          {jobMode === "text" ? (
+            <label>
+              Job Description
+              <textarea
+                className="large-textarea"
+                value={jobText}
+                onChange={(event) => setJobText(event.target.value)}
+              />
+            </label>
+          ) : (
+            <label>
+              Job URL
+              <input value={jobUrl} onChange={(event) => setJobUrl(event.target.value)} />
+            </label>
+          )}
+          <button className="primary inline" disabled={!candidateId || loading === "job"} onClick={importJob}>
+            {loading === "job" ? "Importing..." : "Import Job"}
+          </button>
+          {job && (
+            <div className="result-box">
+              <strong>{job.title}</strong>
+              <span>{job.company}</span>
+              <span>{job.location ?? "Location not specified"}</span>
+            </div>
+          )}
+        </section>
+
+        <section className="wizard-section">
+          <h3>Match</h3>
+          <button className="primary inline" disabled={!candidateId || !jobId || loading === "match"} onClick={generateMatch}>
+            {loading === "match" ? "Generating..." : "Generate Match"}
+          </button>
+          {matchResult && <MatchSummary match={matchResult} />}
+        </section>
+
+        <section className="wizard-section">
+          <h3>Application Package</h3>
+          <button
+            className="primary inline"
+            disabled={!matchResult || loading === "package"}
+            onClick={generatePackage}
+          >
+            {loading === "package" ? "Generating..." : "Generate Package"}
+          </button>
+          {applicationPackage && <PackageSummary applicationPackage={applicationPackage} />}
+        </section>
+
+        <section className="wizard-section">
+          <h3>Application</h3>
+          <button
+            className="primary inline"
+            disabled={!applicationPackage || !matchId || loading === "application"}
+            onClick={createApplication}
+          >
+            {loading === "application" ? "Creating..." : "Create Application"}
+          </button>
+          {application && (
+            <div className="result-box">
+              <strong>Status: {statusLabels[application.status]}</strong>
+              <span>Next action: continue through the application pipeline.</span>
+              <button onClick={onOpenApplications}>Open Pipeline</button>
+            </div>
+          )}
+        </section>
       </div>
+
       {message && <p className="notice success">{message}</p>}
       {error && <Notice message={error} />}
     </Panel>
   );
+}
+
+function MatchSummary({ match }: { match: MatchResult }) {
+  const gaps = [
+    ...(match.gaps?.critical ?? []),
+    ...(match.gaps?.moderate ?? []),
+    ...(match.gaps?.optional ?? [])
+  ];
+  return (
+    <div className="summary-stack">
+      <div className="score-badge">{match.score}% match</div>
+      <Timeline
+        title="Strengths"
+        items={(match.strengths ?? []).map((strength) => strength.skill)}
+      />
+      <Timeline title="Gaps" items={gaps} />
+      <Timeline title="Recommended Actions" items={match.recommended_actions ?? []} />
+      {match.recommendation && <p className="muted">{match.recommendation}</p>}
+    </div>
+  );
+}
+
+function PackageSummary({
+  applicationPackage
+}: {
+  applicationPackage: ApplicationPackage;
+}) {
+  return (
+    <div className="summary-stack">
+      <p>{applicationPackage.tailored_summary}</p>
+      <Timeline title="Key Strengths" items={applicationPackage.key_strengths} />
+      <Timeline title="Risk Gaps" items={applicationPackage.risk_gaps} />
+      <Timeline title="Recommended CV Edits" items={applicationPackage.recommended_cv_edits} />
+    </div>
+  );
+}
+
+function loadIntakeWizardState(): IntakeWizardState | null {
+  try {
+    const raw = sessionStorage.getItem(INTAKE_WIZARD_STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as IntakeWizardState) : null;
+  } catch {
+    return null;
+  }
+}
+
+function required(value: string, label: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    throw new Error(`${label} is required.`);
+  }
+  return trimmed;
+}
+
+function requiredList(value: string, label: string): string[] {
+  const items = value
+    .split(/[\n,]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  if (!items.length) {
+    throw new Error(`${label} is required.`);
+  }
+  return items;
 }
 
 function ApplicationsPage() {

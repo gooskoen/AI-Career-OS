@@ -1,10 +1,14 @@
 import type {
   ApplicationBoard,
+  ApplicationPackage,
   ApplicationSummary,
   AuthResponse,
   CandidateProfile,
   DashboardReport,
   FunnelReport,
+  JobImportResult,
+  JobRecord,
+  MatchResult,
   OutcomeReport,
   PipelineStatus,
   RecommendationReport,
@@ -49,7 +53,15 @@ async function request<T>(
     headers.set("Authorization", `Bearer ${token}`);
   }
 
-  const response = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  } catch (caught) {
+    const message = caught instanceof Error ? caught.message : "network error";
+    throw new Error(
+      `Unable to reach the API. Check backend URL, network access, and CORS settings. (${message})`
+    );
+  }
   if (response.status === 401 && retry && sessionStorage.getItem(REFRESH_TOKEN_KEY)) {
     await refreshSession();
     return request<T>(path, options, false);
@@ -63,10 +75,45 @@ async function request<T>(
 async function errorMessage(response: Response): Promise<string> {
   try {
     const body = await response.json();
-    return body?.error?.message ?? "Request failed";
+    const message = body?.error?.message ?? "Request failed";
+    const details = formatValidationDetails(body?.error?.details);
+    return details ? `${message}: ${details}` : message;
   } catch {
     return "Request failed";
   }
+}
+
+function formatValidationDetails(details: unknown): string {
+  if (!Array.isArray(details)) {
+    return "";
+  }
+  return details
+    .map((detail) => {
+      if (!detail || typeof detail !== "object") {
+        return "";
+      }
+      const record = detail as { loc?: unknown; msg?: unknown };
+      const location = Array.isArray(record.loc)
+        ? record.loc.filter((part) => part !== "body").join(".")
+        : "";
+      const message = typeof record.msg === "string" ? record.msg : "";
+      return [location, message].filter(Boolean).join(": ");
+    })
+    .filter(Boolean)
+    .join("; ");
+}
+
+function candidatePayload(candidate: CandidateProfile): CandidateProfile {
+  return {
+    name: candidate.name ?? candidate.display_name ?? "",
+    headline: candidate.headline ?? "",
+    location: candidate.location ?? "",
+    summary: candidate.summary ?? "",
+    target_roles: candidate.target_roles ?? [],
+    skills: candidate.skills ?? [],
+    experience_highlights: candidate.experience_highlights ?? [],
+    portfolio_links: candidate.portfolio_links ?? []
+  };
 }
 
 export const api = {
@@ -158,19 +205,7 @@ export const api = {
   },
 
   importJob(rawText: string, candidateId?: string) {
-    return request<{
-      job: {
-        id: string;
-        title: string;
-        company: string;
-        location?: string;
-        description: string;
-        required_skills: string[];
-        nice_to_have_skills: string[];
-      };
-      duplicate: boolean;
-      match?: { id: string } | null;
-    }>("/jobs/import-text", {
+    return request<JobImportResult>("/jobs/import-text", {
       method: "POST",
       body: JSON.stringify({
         raw_text: rawText,
@@ -179,35 +214,48 @@ export const api = {
     });
   },
 
-  createMatch(candidateId: string, jobId: string) {
-    return request<{ id: string; score?: number; strengths?: string[]; gaps?: unknown[] }>(
-      "/matches/persist",
-      {
-        method: "POST",
-        body: JSON.stringify({
-          candidate_profile_id: candidateId,
-          job_description_id: jobId
-        })
-      }
-    );
-  },
-
-  generatePackage(candidate: CandidateProfile, job: unknown, matchResult: unknown) {
-    return request("/applications/package", {
+  importJobText(rawText: string, candidateId?: string) {
+    return request<JobImportResult>("/jobs/import-text", {
       method: "POST",
       body: JSON.stringify({
-        candidate: {
-          name: candidate.name ?? candidate.display_name ?? "Demo Candidate",
-          headline: candidate.headline ?? "AI operations candidate",
-          location: candidate.location ?? "Remote",
-          summary: candidate.summary ?? "Private beta candidate profile.",
-          target_roles: candidate.target_roles ?? ["AI Operations"],
-          skills: candidate.skills ?? ["Python", "workflow automation"],
-          experience_highlights: candidate.experience_highlights ?? [
-            "Built workflow automation and reporting."
-          ],
-          portfolio_links: []
-        },
+        raw_text: rawText,
+        match_candidate_id: candidateId
+      })
+    });
+  },
+
+  importJobUrl(url: string, candidateId?: string) {
+    return request<JobImportResult>("/jobs/import-url", {
+      method: "POST",
+      body: JSON.stringify({
+        url,
+        match_candidate_id: candidateId
+      })
+    });
+  },
+
+  previewMatch(candidate: CandidateProfile, job: JobRecord) {
+    return request<MatchResult>("/match", {
+      method: "POST",
+      body: JSON.stringify({ candidate: candidatePayload(candidate), job })
+    });
+  },
+
+  createMatch(candidateId: string, jobId: string) {
+    return request<MatchResult & { id: string }>("/matches/persist", {
+      method: "POST",
+      body: JSON.stringify({
+        candidate_profile_id: candidateId,
+        job_description_id: jobId
+      })
+    });
+  },
+
+  generatePackage(candidate: CandidateProfile, job: JobRecord, matchResult: MatchResult) {
+    return request<ApplicationPackage>("/applications/package", {
+      method: "POST",
+      body: JSON.stringify({
+        candidate: candidatePayload(candidate),
         job,
         match_result: matchResult
       })

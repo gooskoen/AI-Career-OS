@@ -14,7 +14,8 @@ driver mismatch, frontend healthcheck, and direct backend register path were
 fixed or verified locally on `career-beta`, but browser auth and the full
 workflow still need to be re-run from the committed fix. Sprint 14 was released
 as `v0.14.0` and the User Intake Wizard is deployed on `career-beta`, but
-browser API calls are blocked by missing CORS middleware/configuration.
+browser API calls were blocked by missing CORS middleware/configuration and
+Generate Match failed because the frontend sent an invalid `/match` payload.
 
 ## Required Before v1.0.0 Private Beta Release
 
@@ -31,6 +32,7 @@ browser API calls are blocked by missing CORS middleware/configuration.
 | V1-009 | Medium | Guided workflow completion state not re-tested | Re-run guided beta workflow through package generation, insights, pipeline movement, and outcome recording. | Generate Package, View Insights, and Record Outcome all show completed only after their own successful actions. |
 | V1-010 | Medium | Performance baseline not measured | Measure login, dashboard, and Kanban load times. | Timings are recorded and reviewed for private beta suitability. |
 | V1-011 | Medium | First-time usability review not completed | Have a first-time tester complete the workflow without developer help. | Usability findings are captured and triaged. |
+| V1-012 | High | User Intake Wizard match request invalid | Normalize the frontend `/match` payload so saved candidate `display_name` is sent as required `candidate.name`. | Generate Match succeeds after candidate intake and job import, and the UI displays score, strengths, gaps, and recommendations. |
 
 ## Confirmed Product Blockers
 
@@ -44,7 +46,7 @@ The migration runner driver mismatch was confirmed during acceptance testing:
 - Additional findings: browser auth was blocked by missing CORS preflight support. Direct `POST /auth/register` now passes via curl after the `DATABASE_URL` runtime fix.
 - Fix in this PR: configurable FastAPI CORS support, structured server-side database operation logging, and guided workflow completion-state fixes.
 - Sprint 14 release: PR #18 was merged, tag `v0.14.0` exists remotely, and User Intake Wizard is deployed on `career-beta`.
-- Remaining blocker: fix CORS for the split frontend/backend deployment, then re-test the full installation and registration workflow.
+- Remaining blockers: fix CORS for the split frontend/backend deployment, fix the User Intake Wizard `/match` payload, then re-test the full installation and registration workflow.
 
 No data-loss defect, authentication defect, or ownership defect has been confirmed yet.
 
@@ -88,5 +90,5 @@ Current recommendation:
 
 ```text
 Do not tag v1.0.0 yet.
-First fix and retest split frontend/backend CORS, then complete the final acceptance run.
+First fix and retest split frontend/backend CORS and User Intake Wizard match generation, then complete the final acceptance run.
 ```
