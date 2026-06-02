@@ -85,7 +85,7 @@ Required variables:
 POSTGRES_DB=ai_career_os
 POSTGRES_USER=ai_career_os
 POSTGRES_PASSWORD=replace-with-a-strong-database-password
-DATABASE_URL=postgresql://ai_career_os:replace-with-a-strong-database-password@postgres:5432/ai_career_os
+DATABASE_URL=postgresql+psycopg://ai_career_os:replace-with-a-strong-database-password@postgres:5432/ai_career_os
 AUTH_SECRET=replace-with-a-strong-auth-secret
 FRONTEND_API_BASE_URL=https://your-domain.example.com
 ```

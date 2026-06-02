@@ -17,11 +17,16 @@ Documentation under test:
 - `docs/production-installation.md`
 - `docker-compose.prod.yml`
 
-Execution status: BLOCKED before installation
+Execution status: FAIL before fix, pending re-test
 
-Reason: The available Codex environment is not a clean Windows/Linux VM and does not have Docker installed or available. Because Docker is required by `docs/production-installation.md`, the installation, runtime, backup, restore, upgrade, and UI acceptance scenarios could not be executed here.
+Reason: A real Docker-capable Private Beta Acceptance Test reached the documented
+migration command and failed before the application runtime workflows could begin.
+The available Codex environment still does not have Docker installed, so the fix
+cannot be re-tested from this session.
 
-This is not a confirmed product defect. It is an environment blocker for formal acceptance evidence.
+This is a confirmed installation blocker found during acceptance testing and fixed
+in this PR by aligning production `DATABASE_URL` examples with SQLAlchemy's
+psycopg v3 dialect.
 
 ## Environment Checked
 
@@ -63,12 +68,46 @@ GitHub checks:
 - `docker-compose.prod.yml` exists on `main`.
 - PR #17 was retargeted/recreated on `main`.
 
+## Real Docker Acceptance Finding
+
+Exact command executed on Docker-capable acceptance machine:
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml run --rm migrations alembic upgrade head
+```
+
+Observed result before fix:
+
+```text
+ModuleNotFoundError: No module named 'psycopg2'
+```
+
+Root cause:
+
+- `.env.example` and `docs/production-installation.md` used `postgresql://...`.
+- Alembic runs through SQLAlchemy.
+- SQLAlchemy interpreted the bare PostgreSQL URL with the default PostgreSQL driver path and attempted to load `psycopg2`.
+- The backend image intentionally installs modern psycopg v3 via `psycopg[binary]`, not `psycopg2-binary`.
+
+Fix applied:
+
+- Updated `.env.example` to use `postgresql+psycopg://...`.
+- Updated `docs/production-installation.md` to use `postgresql+psycopg://...`.
+- Updated `docs/migrations.md` to document that Alembic uses SQLAlchemy with the psycopg v3 dialect.
+- Added a lightweight configuration test to prevent production examples from regressing to bare `postgresql://`.
+
+Status after fix:
+
+```text
+PENDING RE-TEST
+```
+
 ## Scenario Results
 
 | ID | Scenario | Status | Evidence Notes | Workaround / Next Step |
 | --- | --- | --- | --- | --- |
-| 1 | Installation | BLOCKED | Docker command unavailable, so Compose startup and migrations could not be run. | Execute on clean Windows/Linux VM with Docker installed. |
-| 2 | First User Registration | BLOCKED | Frontend/backend stack could not be started. | Run after installation passes. |
+| 1 | Installation | FAIL | Migration runner failed before fix with `ModuleNotFoundError: No module named 'psycopg2'` because production `DATABASE_URL` examples used bare `postgresql://`. | Re-run installation after the `postgresql+psycopg://` fix in this PR. |
+| 2 | First User Registration | BLOCKED | Frontend/backend stack could not be started because migration failed before fix. | Run after installation passes. |
 | 3 | Candidate Creation | BLOCKED | Requires authenticated running app. | Run after login passes. |
 | 4 | Job Import | BLOCKED | Requires running backend/frontend. | Run after installation passes. |
 | 5 | Matching | BLOCKED | Requires candidate and job setup. | Run after candidate/job workflows pass. |
@@ -77,7 +116,7 @@ GitHub checks:
 | 8 | Outcome Tracking | BLOCKED | Requires application workflow. | Run after lifecycle scenario. |
 | 9 | Reporting | BLOCKED | Requires populated runtime data. | Run after outcomes exist. |
 | 10 | Security | BLOCKED | Requires two running authenticated users. | Run User A/User B isolation after installation. |
-| 11 | Backup | BLOCKED | Requires live PostgreSQL container. | Run after data exists in PostgreSQL. |
+| 11 | Backup | BLOCKED | Requires live PostgreSQL container and completed installation. | Run after data exists in PostgreSQL. |
 | 12 | Restore | BLOCKED | Requires backup artifact and live PostgreSQL container. | Run after backup passes. |
 | 13 | Upgrade | BLOCKED | Requires deployed app and Docker Compose. | Run after initial deployment passes. |
 | 14 | Performance | BLOCKED | Requires browser access to running app. | Measure after app is running. |
@@ -89,39 +128,41 @@ GitHub checks:
 | --- | ---: |
 | Total scenarios | 15 |
 | PASS | 0 |
-| FAIL | 0 |
-| BLOCKED | 15 |
+| FAIL | 1 |
+| BLOCKED | 14 |
 | NOT RUN | 0 |
 
 Pass rate: 0%
 
-The 0% pass rate is due to environment blocking before installation, not due to failed application behavior.
+The pass rate remains 0% because the installation scenario failed before fix and
+all later runtime scenarios are blocked until migration succeeds.
 
 ## Discovered Defects
 
-No application defects were confirmed.
+One installation defect was confirmed during the real Docker acceptance test.
 
-Confirmed environment blocker:
+Confirmed issues:
 
 | ID | Severity | Area | Finding | Evidence |
 | --- | --- | --- | --- | --- |
 | PBAT-ENV-001 | High | Test Environment | Docker is unavailable in the current Codex environment. | `docker --version` and `docker compose version` both failed because `docker` was not recognized. |
+| PBAT-009 | High | Migration Runner | Alembic migration runner attempted to load `psycopg2`. | `docker compose --env-file .env.production -f docker-compose.prod.yml run --rm migrations alembic upgrade head` failed with `ModuleNotFoundError: No module named 'psycopg2'`. |
 
 ## Issues Encountered
 
-- Docker is not installed or not available on PATH in the current environment.
-- The environment is not clean, so it does not meet the acceptance test environment requirement.
-- No screenshots were captured because the app could not be started.
+- Docker is not installed or not available on PATH in the Codex environment.
+- The Codex environment is not clean, so it does not meet the acceptance test environment requirement.
+- The Docker-capable acceptance machine found a migration driver mismatch before the app could start.
+- No screenshots were captured in this session because the app could not be started here.
 
 ## Workaround Notes
 
 Use a clean VM/laptop for the real acceptance run:
 
-1. Provision clean Windows or Linux environment.
-2. Install Docker and Docker Compose.
-3. Clone `gooskoen/AI-Career-OS` from `main`.
-4. Follow `docs/production-installation.md` exactly.
-5. Record evidence for every scenario in this file.
+1. Pull the updated PR branch containing the `postgresql+psycopg://` fix.
+2. Re-run the documented migration command on the Docker-capable machine.
+3. If migration passes, continue the acceptance workflow from registration onward.
+4. Record evidence for every scenario in this file.
 
 ## Performance Results
 
@@ -172,15 +213,16 @@ Required follow-up:
 
 ## Remediation Recommendations
 
-1. Execute this acceptance test on a clean VM or laptop with Docker available.
+1. Re-run installation on a Docker-capable acceptance machine after this fix.
 2. Keep PR #17 draft until actual scenario evidence is captured.
 3. Do not tag `v1.0.0` until installation, backup, restore, ownership, and at least 90% of scenarios pass.
-4. If a scenario fails in the clean environment, convert it into a concrete defect in `PRIVATE_BETA_KNOWN_ISSUES.md` and update `V1_BLOCKERS.md`.
+4. If another scenario fails, convert it into a concrete defect in `PRIVATE_BETA_KNOWN_ISSUES.md` and update `V1_BLOCKERS.md`.
 
 ## Final Decision
 
 PRIVATE_BETA_READY = NO
 
-Reason: Acceptance execution is blocked by the current environment. No clean-environment evidence exists yet.
+Reason: Installation failed before fix and must be re-tested. No clean-environment
+pass evidence exists yet.
 
 Recommendation: Do not declare `v1.0.0 Private Beta Release` until the clean-environment acceptance run passes the success criteria.
