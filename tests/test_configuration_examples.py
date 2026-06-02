@@ -38,3 +38,12 @@ def test_backend_installs_psycopg_v3_not_psycopg2() -> None:
 
     assert "psycopg[binary]" in requirements
     assert "psycopg2-binary" not in requirements
+
+
+def test_frontend_production_healthcheck_uses_node_runtime() -> None:
+    compose = (ROOT / "docker-compose.prod.yml").read_text(encoding="utf-8")
+
+    assert "node -e" in compose
+    assert "fetch('http://127.0.0.1:3000')" in compose
+    assert "wget -qO-" not in compose
+    assert "curl -f" not in compose

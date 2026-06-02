@@ -26,6 +26,7 @@ installation and workflow have not yet been re-run from the committed fix.
 | PBAT-007 | Low | Production Hardening | Known Limitation | `vite preview` is documented as acceptable for controlled private beta but not hardened broad production hosting. | Documented in `docs/production-installation.md`. | For broader production, serve `frontend/dist` with Nginx, Caddy, or managed static hosting. |
 | PBAT-008 | Low | Security Hardening | Known Limitation | Refresh token storage remains MVP-level in `v0.13.0`. | Documented production warning. | Revisit token/session hardening before broad public SaaS launch. |
 | PBAT-009 | High | Migration Runner | Resolved, Pending Full Installation Re-Run | Production migration runner failed with `ModuleNotFoundError: No module named 'psycopg2'`. | `alembic upgrade head` used a bare `postgresql://` URL, causing SQLAlchemy to attempt the default psycopg2 driver while the backend image installs psycopg v3. On `career-beta`, changing `DATABASE_URL` to `postgresql+psycopg://...` allowed Alembic to start successfully. | Resolved by standardizing documented and compose `DATABASE_URL` examples to `postgresql+psycopg://`; re-run the full production installation from the committed fix. |
+| PBAT-010 | Medium | Frontend Healthcheck | Fixed, Pending VM Re-Test | Frontend container reported unhealthy although the frontend served `HTTP/1.1 200 OK`. | On `career-beta`, `docker ps` showed `ai-career-os-frontend-1 unhealthy`, while `curl -I http://127.0.0.1:3000` returned `HTTP/1.1 200 OK`. | Fixed by replacing the frontend healthcheck with a Node-native `fetch()` command that works inside `node:22-alpine`; recreate frontend container and re-check health. |
 
 ## Critical Issues
 
@@ -49,6 +50,11 @@ branch.
 
 - PBAT-005: Performance baseline not measured.
 - PBAT-006: First-time usability review not performed.
+- PBAT-010: Frontend healthcheck failed even though frontend runtime returned 200 OK.
+
+PBAT-010 is fixed in this PR by replacing the `wget`-based frontend healthcheck
+with a Node-native `fetch()` command. It remains pending VM re-test until
+`docker ps` reports the frontend container healthy after recreation.
 
 ## Low Issues
 

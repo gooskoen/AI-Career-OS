@@ -124,11 +124,51 @@ PSYCOG2 IMPORT ERROR RESOLVED BY TEMPORARY VM RETEST
 FULL INSTALLATION WORKFLOW STILL PENDING
 ```
 
+## Real Docker Frontend Healthcheck Finding
+
+Exact runtime check executed on Docker-capable acceptance machine:
+
+```bash
+curl -I http://127.0.0.1:3000
+```
+
+Observed frontend runtime result:
+
+```text
+HTTP/1.1 200 OK
+```
+
+Observed container health result:
+
+```text
+ai-career-os-frontend-1 unhealthy
+```
+
+Root cause:
+
+- `docker-compose.prod.yml` used a frontend healthcheck based on `wget`.
+- The production frontend container uses `node:22-alpine`.
+- The frontend runtime was serving correctly, but the healthcheck command was not portable for that container image.
+
+Fix applied:
+
+- Replaced the frontend healthcheck with a Node-native command:
+
+```bash
+node -e "fetch('http://127.0.0.1:3000').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+```
+
+Retest status:
+
+```text
+PENDING VM RETEST
+```
+
 ## Scenario Results
 
 | ID | Scenario | Status | Evidence Notes | Workaround / Next Step |
 | --- | --- | --- | --- | --- |
-| 1 | Installation | FAIL | Migration runner failed before fix with `ModuleNotFoundError: No module named 'psycopg2'` because production `DATABASE_URL` examples used bare `postgresql://`. Temporary VM retest with `postgresql+psycopg://...` allowed Alembic to start successfully. | Re-run the full installation from the committed PR branch after the `postgresql+psycopg://` fix. |
+| 1 | Installation | FAIL | Migration runner failed before fix with `ModuleNotFoundError: No module named 'psycopg2'` because production `DATABASE_URL` examples used bare `postgresql://`. Temporary VM retest with `postgresql+psycopg://...` allowed Alembic to start successfully. Frontend runtime returned `HTTP/1.1 200 OK`, but Docker marked the frontend container unhealthy because the healthcheck used a non-portable command. | Re-run the full installation from the committed PR branch after the `postgresql+psycopg://` and frontend healthcheck fixes. |
 | 2 | First User Registration | BLOCKED | Frontend/backend stack could not be started because migration failed before fix. | Run after installation passes. |
 | 3 | Candidate Creation | BLOCKED | Requires authenticated running app. | Run after login passes. |
 | 4 | Job Import | BLOCKED | Requires running backend/frontend. | Run after installation passes. |
@@ -162,7 +202,7 @@ re-tested on `career-beta` and resolved by using `postgresql+psycopg://...`.
 
 ## Discovered Defects
 
-One installation defect was confirmed during the real Docker acceptance test.
+Two installation defects were confirmed during the real Docker acceptance test.
 
 Confirmed issues:
 
@@ -170,12 +210,14 @@ Confirmed issues:
 | --- | --- | --- | --- | --- |
 | PBAT-ENV-001 | High | Test Environment | Docker is unavailable in the current Codex environment. | `docker --version` and `docker compose version` both failed because `docker` was not recognized. |
 | PBAT-009 | High | Migration Runner | Alembic migration runner attempted to load `psycopg2`. | `docker compose --env-file .env.production -f docker-compose.prod.yml run --rm migrations alembic upgrade head` failed with `ModuleNotFoundError: No module named 'psycopg2'`; temporary VM retest with `postgresql+psycopg://...` allowed Alembic to start successfully. |
+| PBAT-010 | Medium | Frontend Healthcheck | Frontend container reported unhealthy even though runtime served `200 OK`. | `docker ps` showed `ai-career-os-frontend-1 unhealthy`, while `curl -I http://127.0.0.1:3000` returned `HTTP/1.1 200 OK`. |
 
 ## Issues Encountered
 
 - Docker is not installed or not available on PATH in the Codex environment.
 - The Codex environment is not clean, so it does not meet the acceptance test environment requirement.
 - The Docker-capable acceptance machine found a migration driver mismatch before the app could start.
+- The Docker-capable acceptance machine found a frontend healthcheck mismatch: frontend runtime passed, container health failed.
 - No screenshots were captured in this session because the app could not be started here.
 
 ## Workaround Notes
@@ -183,9 +225,11 @@ Confirmed issues:
 Use a clean VM/laptop for the real acceptance run:
 
 1. Pull the updated PR branch containing the `postgresql+psycopg://` fix.
-2. Re-run the documented migration command on the Docker-capable machine using the committed examples.
-3. If migration still starts successfully, continue the acceptance workflow from registration onward.
-4. Record evidence for every scenario in this file.
+2. Recreate the frontend container with the updated Node-native healthcheck.
+3. Re-run the documented migration command on the Docker-capable machine using the committed examples.
+4. Confirm `docker ps` no longer reports the frontend container as unhealthy.
+5. If migration still starts successfully and frontend health is green, continue the acceptance workflow from registration onward.
+6. Record evidence for every scenario in this file.
 
 ## Performance Results
 

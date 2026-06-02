@@ -585,6 +585,44 @@ Fix:
 - Confirm backend `/health` works.
 - Confirm frontend was rebuilt after changing API base URL.
 
+### Frontend Container Unhealthy But Page Loads
+
+Symptom:
+
+- `docker ps` shows the frontend container as `unhealthy`.
+- The frontend still responds successfully:
+
+```bash
+curl -I http://127.0.0.1:3000
+```
+
+Expected healthy runtime response:
+
+```text
+HTTP/1.1 200 OK
+```
+
+Likely cause:
+
+- The Docker healthcheck command uses a tool that is not available inside the
+  `node:22-alpine` frontend container.
+
+Fix:
+
+- Use the updated `docker-compose.prod.yml` frontend healthcheck, which uses
+  Node's built-in `fetch()` instead of `curl` or `wget`.
+- Rebuild and recreate the frontend container:
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build frontend
+```
+
+- Check health again:
+
+```bash
+docker ps
+```
+
 ### CORS Or API URL Issue
 
 Symptom:
