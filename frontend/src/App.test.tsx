@@ -113,6 +113,47 @@ describe("App", () => {
     expect(screen.getByText("Recommendation Analytics")).toBeInTheDocument();
   });
 
+  test("guided workflow marks Generate Package complete after package generation", async () => {
+    const { container } = renderAuthenticatedApp();
+
+    await runWorkflowThroughMatch();
+    fireEvent.click(screen.getByRole("button", { name: "Generate Package" }));
+
+    expect(await screen.findByText("package generated")).toBeInTheDocument();
+    expect(workflowChip(container, "Generate Package")).toHaveClass("done");
+  });
+
+  test("guided workflow marks View Insights complete after opening insights", async () => {
+    const { container } = renderAuthenticatedApp();
+
+    fireEvent.click(await screen.findByRole("button", { name: "View Insights" }));
+
+    expect(await screen.findByText("Outcome Analytics")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Dashboard" }));
+
+    expect(await screen.findByText("Beta Workflow Validation")).toBeInTheDocument();
+    expect(workflowChip(container, "View Insights")).toHaveClass("done");
+  });
+
+  test("recording an outcome does not skip unresolved package or insights steps", async () => {
+    const { container } = renderAuthenticatedApp();
+
+    await runWorkflowThroughMatch();
+    fireEvent.click(screen.getByRole("button", { name: "Create Application" }));
+    expect(await screen.findByText("application created")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Move To Applied" }));
+    expect(await screen.findByText("pipeline updated")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Record Outcome" }));
+    expect(await screen.findByText("outcome recorded")).toBeInTheDocument();
+
+    expect(workflowChip(container, "Record Outcome")).toHaveClass("done");
+    expect(workflowChip(container, "Generate Package")).toHaveClass("todo");
+    expect(workflowChip(container, "View Insights")).toHaveClass("todo");
+  });
+
   test("logout returns to login screen", async () => {
     renderAuthenticatedApp();
 
@@ -131,10 +172,29 @@ function renderAuthenticatedApp() {
     "ai-career-os.user",
     JSON.stringify({ id: "user-1", email: "demo@example.com", display_name: "Demo User" })
   );
-  render(<App />);
+  return render(<App />);
 }
 
-async function mockFetch(input: RequestInfo | URL) {
+async function runWorkflowThroughMatch() {
+  fireEvent.click(await screen.findByRole("button", { name: "Create Candidate" }));
+  expect(await screen.findByText("candidate created")).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "Import Job" }));
+  expect(await screen.findByText("job imported")).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "Review Match" }));
+  expect(await screen.findByText("match reviewed")).toBeInTheDocument();
+}
+
+function workflowChip(container: HTMLElement, label: string) {
+  const chip = Array.from(container.querySelectorAll(".workflow-steps span")).find(
+    (element) => element.textContent === label
+  );
+  expect(chip).toBeDefined();
+  return chip as HTMLElement;
+}
+
+async function mockFetch(input: RequestInfo | URL, init?: RequestInit) {
   const url = String(input);
   if (url.endsWith("/auth/login")) {
     return json({
@@ -179,7 +239,48 @@ async function mockFetch(input: RequestInfo | URL) {
     return json(summary);
   }
   if (url.endsWith("/candidates")) {
+    if (init?.method === "POST") {
+      return json({
+        id: "candidate-1",
+        name: "Private Beta Candidate",
+        headline: "AI Operations and Reporting Specialist",
+        skills: ["Python"]
+      });
+    }
     return json([{ display_name: "Demo Candidate", headline: "AI Operator", skills: ["Python"] }]);
+  }
+  if (url.endsWith("/jobs/import-text")) {
+    return json({
+      job: {
+        id: "job-1",
+        title: "AI Operations Lead",
+        company: "ExampleTech",
+        description: "Lead workflow automation.",
+        required_skills: ["Python"],
+        nice_to_have_skills: []
+      },
+      duplicate: false,
+      match: { id: "match-imported" }
+    });
+  }
+  if (url.endsWith("/matches/persist")) {
+    return json({ id: "match-1", score: 86, strengths: ["Python"], gaps: [] });
+  }
+  if (url.endsWith("/applications/package")) {
+    return json({
+      tailored_summary: "Private beta package summary",
+      cover_letter: "Short cover letter",
+      talking_points: ["Workflow automation"]
+    });
+  }
+  if (url.endsWith("/applications")) {
+    return json({ id: "application-1", status: "drafted", source: "private_beta_ui" });
+  }
+  if (url.endsWith("/applications/application-1/transition")) {
+    return json({ id: "application-1", status: "applied", source: "private_beta_ui" });
+  }
+  if (url.endsWith("/outcomes")) {
+    return json({ id: "outcome-1", outcome: "applied" });
   }
   return json({});
 }

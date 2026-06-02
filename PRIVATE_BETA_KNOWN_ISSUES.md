@@ -29,6 +29,7 @@ installation and workflow have not yet been re-run from the committed fix.
 | PBAT-010 | Medium | Frontend Healthcheck | Resolved on VM, Pending Committed Re-Test | Frontend container reported unhealthy although the frontend served `HTTP/1.1 200 OK`. | On `career-beta`, `docker ps` showed `ai-career-os-frontend-1 unhealthy`, while `curl -I http://127.0.0.1:3000` returned `HTTP/1.1 200 OK`. After applying the Node-based healthcheck locally on the VM, frontend healthcheck passed. | Fixed by replacing the frontend healthcheck with a Node-native `fetch()` command that works inside `node:22-alpine`; recreate frontend container from the committed branch and re-check health. |
 | PBAT-011 | High | CORS | Fixed, Pending VM Re-Test | Browser registration failed with `Failed to fetch` because auth preflight requests returned `405 Method Not Allowed`. | Backend logs showed `OPTIONS /auth/register HTTP/1.1 405 Method Not Allowed` and `OPTIONS /auth/login HTTP/1.1 405 Method Not Allowed` for frontend `http://192.168.1.130:3000` calling backend `http://192.168.1.130:8000`. | Fixed by adding FastAPI CORS middleware and configurable `CORS_ORIGINS`; set `CORS_ORIGINS` to the frontend origin and recreate backend. |
 | PBAT-012 | High | Database Diagnostics | Resolved on VM, Diagnostics Retained | Direct backend registration initially returned `503 service_unavailable` / `Database operation failed`. | After the `DATABASE_URL` runtime fix, direct backend registration passed via curl on `career-beta`. | Server-side exception logging remains in this PR for future database operation failures while API responses stay generic. |
+| PBAT-013 | Medium | Guided Workflow UX | Fixed, Pending VM Re-Test | Guided beta workflow completion state did not mark `Generate Package` and `View Insights` complete. | The workflow reached `outcome recorded`, but those two chips/buttons remained grey/incomplete. | Fixed by wiring package success state, visible workflow errors, and a View Insights workflow action that marks the step complete. |
 
 ## Critical Issues
 
@@ -55,10 +56,14 @@ branch.
 - PBAT-005: Performance baseline not measured.
 - PBAT-006: First-time usability review not performed.
 - PBAT-010: Frontend healthcheck failed even though frontend runtime returned 200 OK.
+- PBAT-013: Guided workflow completion state did not mark package and insights steps complete.
 
 PBAT-010 is fixed in this PR by replacing the `wget`-based frontend healthcheck
 with a Node-native `fetch()` command. The fix passed locally on `career-beta`,
 and still needs committed-branch re-test.
+
+PBAT-013 is fixed in this PR by completing the guided workflow state for package
+generation and insights viewing. It still needs committed-branch browser re-test.
 
 ## Low Issues
 

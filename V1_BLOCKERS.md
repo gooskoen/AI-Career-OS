@@ -26,8 +26,9 @@ workflow still need to be re-run from the committed fix.
 | V1-006 | High | Backup and restore not proven | Execute backup and restore scenarios with real PostgreSQL container data. | Backup file exists, restore completes, login/dashboard/application list work after restore. |
 | V1-007 | High | Ownership isolation not proven | Execute User A / User B data isolation scenario. | User A cannot access User B candidates, applications, or reporting. |
 | V1-008 | High | Upgrade path not proven | Execute documented upgrade flow. | `git pull`, rebuild, migration runner, restart, and smoke test pass. |
-| V1-009 | Medium | Performance baseline not measured | Measure login, dashboard, and Kanban load times. | Timings are recorded and reviewed for private beta suitability. |
-| V1-010 | Medium | First-time usability review not completed | Have a first-time tester complete the workflow without developer help. | Usability findings are captured and triaged. |
+| V1-009 | Medium | Guided workflow completion state not re-tested | Re-run guided beta workflow through package generation, insights, pipeline movement, and outcome recording. | Generate Package, View Insights, and Record Outcome all show completed only after their own successful actions. |
+| V1-010 | Medium | Performance baseline not measured | Measure login, dashboard, and Kanban load times. | Timings are recorded and reviewed for private beta suitability. |
+| V1-011 | Medium | First-time usability review not completed | Have a first-time tester complete the workflow without developer help. | Usability findings are captured and triaged. |
 
 ## Confirmed Product Blockers
 
@@ -39,7 +40,7 @@ The migration runner driver mismatch was confirmed during acceptance testing:
 - Fix in this PR: production and compose examples now use `postgresql+psycopg://` for psycopg v3.
 - Temporary retest: on `career-beta`, switching `DATABASE_URL` to `postgresql+psycopg://...` allowed Alembic to start successfully and removed the `psycopg2` import failure.
 - Additional findings: browser auth was blocked by missing CORS preflight support. Direct `POST /auth/register` now passes via curl after the `DATABASE_URL` runtime fix.
-- Fix in this PR: configurable FastAPI CORS support plus structured server-side database operation logging.
+- Fix in this PR: configurable FastAPI CORS support, structured server-side database operation logging, and guided workflow completion-state fixes.
 - Remaining blocker: re-test the full installation and registration workflow from the committed PR branch.
 
 No data-loss defect, authentication defect, or ownership defect has been confirmed yet.

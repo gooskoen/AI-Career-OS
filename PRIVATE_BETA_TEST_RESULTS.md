@@ -202,6 +202,54 @@ Retest status:
 PENDING VM RETEST
 ```
 
+## Real Docker Guided Workflow Completion Finding
+
+Observed guided workflow result on `career-beta`:
+
+- Register: completed
+- Login: completed
+- Create Candidate: completed
+- Import Job: completed
+- Review Match: completed
+- Create Application: completed
+- Move Through Pipeline: completed
+- Record Outcome: completed
+
+Observed UI message:
+
+```text
+outcome recorded
+```
+
+Observed issue:
+
+- `Generate Package` remained grey/incomplete.
+- `View Insights` remained grey/incomplete.
+
+Severity:
+
+```text
+MEDIUM
+```
+
+Root cause:
+
+- `View Insights` was available through navigation but was not wired into the guided workflow completion state.
+- Package generation completion relied on frontend state that needed explicit success/error handling in the guided flow.
+
+Fix applied:
+
+- Added a guided workflow `View Insights` button that navigates to Insights and marks the workflow step complete.
+- Marked `View Insights` complete when the user opens Insights from navigation.
+- Added visible workflow error handling.
+- Added tests for package completion, insights completion, and outcome recording without skipping unresolved workflow steps.
+
+Retest status:
+
+```text
+PENDING VM RETEST
+```
+
 ## Real Docker Direct Backend Auth Finding
 
 Exact direct backend result after the `DATABASE_URL` runtime fix:
@@ -246,9 +294,9 @@ PENDING VM RETEST
 | 4 | Job Import | BLOCKED | Requires running backend/frontend. | Run after installation passes. |
 | 5 | Matching | BLOCKED | Requires candidate and job setup. | Run after candidate/job workflows pass. |
 | 6 | Application Package | BLOCKED | Requires match result and running app. | Run after matching passes. |
-| 7 | Application Lifecycle | BLOCKED | Requires application creation and pipeline API/UI. | Run after package/application setup. |
-| 8 | Outcome Tracking | BLOCKED | Requires application workflow. | Run after lifecycle scenario. |
-| 9 | Reporting | BLOCKED | Requires populated runtime data. | Run after outcomes exist. |
+| 7 | Application Lifecycle | FAIL | Guided workflow reached application creation, pipeline movement, and outcome recording, but `Generate Package` and `View Insights` chips remained incomplete. Backend workflow remained functional. | Re-run after frontend guided workflow state fix. |
+| 8 | Outcome Tracking | FAIL | UI displayed `outcome recorded`, but unresolved workflow steps stayed grey, making completion state misleading. | Re-run after frontend guided workflow state fix. |
+| 9 | Reporting | BLOCKED | Insights are accessible through navigation, but the guided workflow did not mark View Insights complete. | Re-run after frontend guided workflow state fix. |
 | 10 | Security | BLOCKED | Requires two running authenticated users. | Run User A/User B isolation after installation. |
 | 11 | Backup | BLOCKED | Requires live PostgreSQL container and completed installation. | Run after data exists in PostgreSQL. |
 | 12 | Restore | BLOCKED | Requires backup artifact and live PostgreSQL container. | Run after backup passes. |
@@ -262,8 +310,8 @@ PENDING VM RETEST
 | --- | ---: |
 | Total scenarios | 15 |
 | PASS | 0 |
-| FAIL | 2 |
-| BLOCKED | 13 |
+| FAIL | 4 |
+| BLOCKED | 11 |
 | NOT RUN | 0 |
 
 Pass rate: 0%
@@ -276,7 +324,7 @@ passes on the VM.
 
 ## Discovered Defects
 
-Four installation/runtime defects were confirmed during the real Docker acceptance test.
+Five installation/runtime/UX defects were confirmed during the real Docker acceptance test.
 
 Confirmed issues:
 
@@ -287,6 +335,7 @@ Confirmed issues:
 | PBAT-010 | Medium | Frontend Healthcheck | Frontend container reported unhealthy even though runtime served `200 OK`. | `docker ps` showed `ai-career-os-frontend-1 unhealthy`, while `curl -I http://127.0.0.1:3000` returned `HTTP/1.1 200 OK`. |
 | PBAT-011 | High | CORS | Browser registration failed due missing CORS preflight support. | Browser showed `Failed to fetch`; backend logged `OPTIONS /auth/register` and `OPTIONS /auth/login` as `405 Method Not Allowed`. |
 | PBAT-012 | High | Database Diagnostics | Direct backend registration initially returned generic 503 before the runtime database fix; server-side diagnostics were improved for future failures. | After the `DATABASE_URL` runtime fix, direct backend registration passed via curl. |
+| PBAT-013 | Medium | Guided Workflow UX | Guided beta workflow completion state did not correctly mark `Generate Package` and `View Insights`. | Workflow executed through `outcome recorded`, but those two chips remained grey/incomplete. |
 
 ## Issues Encountered
 
@@ -296,6 +345,7 @@ Confirmed issues:
 - The Docker-capable acceptance machine found a frontend healthcheck mismatch: frontend runtime passed, container health failed.
 - The Docker-capable acceptance machine found missing CORS preflight support for browser registration/login.
 - Direct backend registration passed via curl after the `DATABASE_URL` runtime fix.
+- Guided beta workflow reached outcome recording, but completion state remained misleading for package and insights steps.
 - No screenshots were captured in this session because the app could not be started here.
 
 ## Workaround Notes
@@ -310,7 +360,9 @@ Use a clean VM/laptop for the real acceptance run:
 6. Confirm `docker ps` no longer reports the frontend container as unhealthy.
 7. Re-run browser registration/login and confirm CORS headers are present.
 8. If browser auth succeeds, continue the acceptance workflow from candidate creation onward.
-9. Record evidence for every scenario in this file.
+9. Generate package and confirm the chip turns complete.
+10. Click View Insights and confirm the chip turns complete after returning to Dashboard.
+11. Record evidence for every scenario in this file.
 
 ## Performance Results
 

@@ -146,6 +146,15 @@ function Shell({
   onPageChange: (page: Page) => void;
   onLogout: () => void;
 }) {
+  const [insightsViewed, setInsightsViewed] = useState(page === "insights");
+
+  function changePage(nextPage: Page) {
+    if (nextPage === "insights") {
+      setInsightsViewed(true);
+    }
+    onPageChange(nextPage);
+  }
+
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -154,16 +163,16 @@ function Shell({
           <h2>Career cockpit</h2>
         </div>
         <nav>
-          <NavButton icon={<LayoutDashboard />} active={page === "dashboard"} onClick={() => onPageChange("dashboard")}>
+          <NavButton icon={<LayoutDashboard />} active={page === "dashboard"} onClick={() => changePage("dashboard")}>
             Dashboard
           </NavButton>
-          <NavButton icon={<BriefcaseBusiness />} active={page === "applications"} onClick={() => onPageChange("applications")}>
+          <NavButton icon={<BriefcaseBusiness />} active={page === "applications"} onClick={() => changePage("applications")}>
             Applications
           </NavButton>
-          <NavButton icon={<BarChart3 />} active={page === "insights"} onClick={() => onPageChange("insights")}>
+          <NavButton icon={<BarChart3 />} active={page === "insights"} onClick={() => changePage("insights")}>
             Insights
           </NavButton>
-          <NavButton icon={<UserRound />} active={page === "profile"} onClick={() => onPageChange("profile")}>
+          <NavButton icon={<UserRound />} active={page === "profile"} onClick={() => changePage("profile")}>
             Profile
           </NavButton>
         </nav>
@@ -173,7 +182,12 @@ function Shell({
         </button>
       </aside>
       <main className="content">
-        {page === "dashboard" && <DashboardPage />}
+        {page === "dashboard" && (
+          <DashboardPage
+            insightsViewed={insightsViewed}
+            onViewInsights={() => changePage("insights")}
+          />
+        )}
         {page === "applications" && <ApplicationsPage />}
         {page === "insights" && <InsightsPage />}
         {page === "profile" && <ProfilePage />}
@@ -201,7 +215,13 @@ function NavButton({
   );
 }
 
-function DashboardPage() {
+function DashboardPage({
+  insightsViewed,
+  onViewInsights
+}: {
+  insightsViewed: boolean;
+  onViewInsights: () => void;
+}) {
   const { data: dashboard, error } = useResource(api.dashboard);
   const { data: funnel } = useResource(api.funnel);
 
@@ -229,12 +249,18 @@ function DashboardPage() {
           ))}
         </div>
       </Panel>
-      <BetaWorkflow />
+      <BetaWorkflow insightsViewed={insightsViewed} onViewInsights={onViewInsights} />
     </section>
   );
 }
 
-function BetaWorkflow() {
+function BetaWorkflow({
+  insightsViewed,
+  onViewInsights
+}: {
+  insightsViewed: boolean;
+  onViewInsights: () => void;
+}) {
   const [candidate, setCandidate] = useState<CandidateProfile | null>(null);
   const [job, setJob] = useState<unknown>(null);
   const [matchResult, setMatchResult] = useState<unknown>(null);
@@ -242,6 +268,7 @@ function BetaWorkflow() {
   const [packageGenerated, setPackageGenerated] = useState(false);
   const [outcomeRecorded, setOutcomeRecorded] = useState(false);
   const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
 
   const candidateId = candidate?.id;
   const jobId = typeof job === "object" && job && "id" in job ? String(job.id) : "";
@@ -260,63 +287,68 @@ function BetaWorkflow() {
     { label: "Create Application", status: application ? "done" : "todo" },
     { label: "Move Through Pipeline", status: application?.status === "applied" ? "done" : "todo" },
     { label: "Record Outcome", status: outcomeRecorded ? "done" : "todo" },
-    { label: "View Insights", status: "todo" }
+    { label: "View Insights", status: insightsViewed ? "done" : "todo" }
   ];
 
   async function runStep(step: string) {
     setMessage("");
-    if (step === "candidate") {
-      const created = await api.createCandidate({
-        name: "Private Beta Candidate",
-        headline: "AI Operations and Reporting Specialist",
-        location: "Remote",
-        summary: "Builds workflow automation, reporting, and application systems.",
-        target_roles: ["AI Operations Lead"],
-        skills: ["Python", "SQL", "workflow automation", "reporting"],
-        experience_highlights: ["Built reporting workflows for operations teams."]
-      });
-      setCandidate(created);
-      setMessage("candidate created");
-    }
-    if (step === "job" && candidateId) {
-      const imported = await api.importJob(
-        [
-          "AI Operations Lead",
-          "ExampleTech",
-          "Remote",
-          "Lead workflow automation, reporting, analytics, and stakeholder delivery.",
-          "Required skills: Python, SQL, workflow automation, reporting"
-        ].join("\n"),
-        candidateId
-      );
-      setJob(imported.job);
-      setMatchResult(imported.match ?? null);
-      setMessage("job imported");
-    }
-    if (step === "match" && candidateId && jobId) {
-      const created = await api.createMatch(candidateId, jobId);
-      setMatchResult(created);
-      setMessage("match reviewed");
-    }
-    if (step === "package" && candidate && job && matchResult) {
-      await api.generatePackage(candidate, job, matchResult);
-      setPackageGenerated(true);
-      setMessage("package generated");
-    }
-    if (step === "application" && candidateId && jobId) {
-      const created = await api.createApplication(candidateId, jobId, matchId || undefined);
-      setApplication(created);
-      setMessage("application created");
-    }
-    if (step === "pipeline" && application) {
-      const updated = (await api.transitionApplication(application.id, "applied")) as ApplicationRecord;
-      setApplication({ ...application, ...updated, status: "applied" });
-      setMessage("pipeline updated");
-    }
-    if (step === "outcome" && candidateId && jobId && application) {
-      await api.recordOutcome(candidateId, jobId, application.id);
-      setOutcomeRecorded(true);
-      setMessage("outcome recorded");
+    setError("");
+    try {
+      if (step === "candidate") {
+        const created = await api.createCandidate({
+          name: "Private Beta Candidate",
+          headline: "AI Operations and Reporting Specialist",
+          location: "Remote",
+          summary: "Builds workflow automation, reporting, and application systems.",
+          target_roles: ["AI Operations Lead"],
+          skills: ["Python", "SQL", "workflow automation", "reporting"],
+          experience_highlights: ["Built reporting workflows for operations teams."]
+        });
+        setCandidate(created);
+        setMessage("candidate created");
+      }
+      if (step === "job" && candidateId) {
+        const imported = await api.importJob(
+          [
+            "AI Operations Lead",
+            "ExampleTech",
+            "Remote",
+            "Lead workflow automation, reporting, analytics, and stakeholder delivery.",
+            "Required skills: Python, SQL, workflow automation, reporting"
+          ].join("\n"),
+          candidateId
+        );
+        setJob(imported.job);
+        setMatchResult(imported.match ?? null);
+        setMessage("job imported");
+      }
+      if (step === "match" && candidateId && jobId) {
+        const created = await api.createMatch(candidateId, jobId);
+        setMatchResult(created);
+        setMessage("match reviewed");
+      }
+      if (step === "package" && candidate && job && matchResult) {
+        await api.generatePackage(candidate, job, matchResult);
+        setPackageGenerated(true);
+        setMessage("package generated");
+      }
+      if (step === "application" && candidateId && jobId) {
+        const created = await api.createApplication(candidateId, jobId, matchId || undefined);
+        setApplication(created);
+        setMessage("application created");
+      }
+      if (step === "pipeline" && application) {
+        const updated = (await api.transitionApplication(application.id, "applied")) as ApplicationRecord;
+        setApplication({ ...application, ...updated, status: "applied" });
+        setMessage("pipeline updated");
+      }
+      if (step === "outcome" && candidateId && jobId && application) {
+        await api.recordOutcome(candidateId, jobId, application.id);
+        setOutcomeRecorded(true);
+        setMessage("outcome recorded");
+      }
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Workflow step failed");
     }
   }
 
@@ -353,8 +385,10 @@ function BetaWorkflow() {
         <button disabled={!application || !candidateId || !jobId} onClick={() => runStep("outcome")}>
           Record Outcome
         </button>
+        <button onClick={onViewInsights}>View Insights</button>
       </div>
       {message && <p className="notice success">{message}</p>}
+      {error && <Notice message={error} />}
     </Panel>
   );
 }
