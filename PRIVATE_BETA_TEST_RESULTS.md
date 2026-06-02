@@ -202,23 +202,23 @@ Retest status:
 PENDING VM RETEST
 ```
 
-## Real Docker Auth Database Finding
+## Real Docker Direct Backend Auth Finding
 
-Exact direct backend result:
+Exact direct backend result after the `DATABASE_URL` runtime fix:
 
 ```text
 POST /auth/register
-503 service_unavailable
-Database operation failed
+PASS via curl
 ```
 
-Root cause:
+Result:
 
-- Not yet confirmed from this Codex environment because Docker is unavailable.
-- The likely failure is a database/schema/runtime configuration problem after the
-  browser CORS blocker is bypassed.
+- Direct backend registration works when called from curl after the PostgreSQL
+  driver/runtime configuration is corrected.
+- Browser registration/login still fails because the browser must pass CORS
+  preflight for the split-origin frontend/backend deployment.
 
-Fix applied:
+Diagnostic improvement retained:
 
 - Added structured server-side logging for database operation failures.
 - Kept API responses generic so database exception details are not leaked to users.
@@ -227,9 +227,8 @@ Fix applied:
 
 Verification required:
 
-- Confirm migrations created the `users` table.
 - Confirm `DATABASE_URL` uses `postgresql+psycopg://`.
-- Re-run `POST /auth/register` after migrations on `career-beta`.
+- Re-run browser registration after setting `CORS_ORIGINS` and recreating the backend.
 
 Retest status:
 
@@ -242,7 +241,7 @@ PENDING VM RETEST
 | ID | Scenario | Status | Evidence Notes | Workaround / Next Step |
 | --- | --- | --- | --- | --- |
 | 1 | Installation | FAIL | Migration runner failed before fix with `ModuleNotFoundError: No module named 'psycopg2'` because production `DATABASE_URL` examples used bare `postgresql://`. Temporary VM retest with `postgresql+psycopg://...` allowed Alembic to start successfully. Frontend runtime returned `HTTP/1.1 200 OK`, but Docker marked the frontend container unhealthy because the healthcheck used a non-portable command. Frontend healthcheck was fixed locally and now passes on `career-beta`. | Re-run the full installation from the committed PR branch after the `postgresql+psycopg://`, frontend healthcheck, and CORS fixes. |
-| 2 | First User Registration | FAIL | Browser registration failed with `Failed to fetch`; backend logs showed `OPTIONS /auth/register` and `OPTIONS /auth/login` returning `405`. Direct backend registration returned `503 service_unavailable` / `Database operation failed`. | Re-run after setting `CORS_ORIGINS`, recreating backend, confirming migrations, and checking backend logs for database diagnostics. |
+| 2 | First User Registration | FAIL | Direct backend registration passed via curl after the `DATABASE_URL` runtime fix. Browser registration/login still failed with `Failed to fetch`; backend logs showed `OPTIONS /auth/register` and `OPTIONS /auth/login` returning `405`. | Re-run browser registration/login after setting `CORS_ORIGINS` and recreating backend from the committed branch. |
 | 3 | Candidate Creation | BLOCKED | Requires authenticated running app. | Run after login passes. |
 | 4 | Job Import | BLOCKED | Requires running backend/frontend. | Run after installation passes. |
 | 5 | Matching | BLOCKED | Requires candidate and job setup. | Run after candidate/job workflows pass. |
@@ -287,7 +286,7 @@ Confirmed issues:
 | PBAT-009 | High | Migration Runner | Alembic migration runner attempted to load `psycopg2`. | `docker compose --env-file .env.production -f docker-compose.prod.yml run --rm migrations alembic upgrade head` failed with `ModuleNotFoundError: No module named 'psycopg2'`; temporary VM retest with `postgresql+psycopg://...` allowed Alembic to start successfully. |
 | PBAT-010 | Medium | Frontend Healthcheck | Frontend container reported unhealthy even though runtime served `200 OK`. | `docker ps` showed `ai-career-os-frontend-1 unhealthy`, while `curl -I http://127.0.0.1:3000` returned `HTTP/1.1 200 OK`. |
 | PBAT-011 | High | CORS | Browser registration failed due missing CORS preflight support. | Browser showed `Failed to fetch`; backend logged `OPTIONS /auth/register` and `OPTIONS /auth/login` as `405 Method Not Allowed`. |
-| PBAT-012 | High | Database Diagnostics | Direct backend registration returned generic 503 without enough server-side diagnostic detail. | `POST /auth/register` returned `503 service_unavailable` / `Database operation failed` during clean acceptance testing. |
+| PBAT-012 | High | Database Diagnostics | Direct backend registration initially returned generic 503 before the runtime database fix; server-side diagnostics were improved for future failures. | After the `DATABASE_URL` runtime fix, direct backend registration passed via curl. |
 
 ## Issues Encountered
 
@@ -296,7 +295,7 @@ Confirmed issues:
 - The Docker-capable acceptance machine found a migration driver mismatch before the app could start.
 - The Docker-capable acceptance machine found a frontend healthcheck mismatch: frontend runtime passed, container health failed.
 - The Docker-capable acceptance machine found missing CORS preflight support for browser registration/login.
-- Direct backend registration reached the backend but returned a database operation 503 that needs backend log inspection after the diagnostics fix.
+- Direct backend registration passed via curl after the `DATABASE_URL` runtime fix.
 - No screenshots were captured in this session because the app could not be started here.
 
 ## Workaround Notes
@@ -309,8 +308,8 @@ Use a clean VM/laptop for the real acceptance run:
 4. Recreate the backend container so CORS config is loaded.
 5. Re-run the documented migration command on the Docker-capable machine using the committed examples.
 6. Confirm `docker ps` no longer reports the frontend container as unhealthy.
-7. Re-run browser registration and direct backend registration.
-8. If registration succeeds, continue the acceptance workflow from candidate creation onward.
+7. Re-run browser registration/login and confirm CORS headers are present.
+8. If browser auth succeeds, continue the acceptance workflow from candidate creation onward.
 9. Record evidence for every scenario in this file.
 
 ## Performance Results

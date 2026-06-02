@@ -30,21 +30,24 @@ from app.routers import (
 
 require_auth_secret()
 
+DEFAULT_CORS_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+
 
 def parse_cors_origins(raw_origins: str | None = None) -> list[str]:
     configured_origins = (
         raw_origins
         if raw_origins is not None
-        else os.getenv(
-            "CORS_ORIGINS",
-            "http://localhost:3000,http://127.0.0.1:3000",
-        )
+        else os.getenv("CORS_ORIGINS", "")
     )
-    return [
+    origins = [
         origin.strip().strip("[]").strip().strip("\"'")
         for origin in configured_origins.split(",")
         if origin.strip()
     ]
+    return origins or DEFAULT_CORS_ORIGINS.copy()
 
 
 app = FastAPI(

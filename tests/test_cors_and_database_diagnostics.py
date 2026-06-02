@@ -14,7 +14,12 @@ from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from app.dependencies import run_database_operation
-from app.main import app, parse_cors_origins
+from app.main import DEFAULT_CORS_ORIGINS, app, parse_cors_origins
+
+
+def test_missing_or_empty_cors_origins_use_local_dev_defaults() -> None:
+    assert parse_cors_origins("") == DEFAULT_CORS_ORIGINS.copy()
+    assert parse_cors_origins("   ") == DEFAULT_CORS_ORIGINS.copy()
 
 
 def test_cors_origins_parse_comma_separated_values() -> None:
