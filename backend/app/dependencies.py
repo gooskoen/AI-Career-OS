@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from pathlib import Path
 from typing import Callable, TypeVar
@@ -20,6 +21,7 @@ from app.repositories import get_user
 
 T = TypeVar("T")
 bearer_scheme = HTTPBearer(auto_error=False)
+logger = logging.getLogger(__name__)
 
 
 def example_profile_path() -> Path:
@@ -47,8 +49,10 @@ def run_database_operation(operation: Callable[..., T]) -> T:
     except UrlFetchError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except RuntimeError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
+        logger.exception("Runtime database configuration failure")
+        raise HTTPException(status_code=503, detail="Database operation failed") from exc
     except PsycopgError as exc:
+        logger.exception("Database operation failed")
         raise HTTPException(status_code=503, detail="Database operation failed") from exc
 
 

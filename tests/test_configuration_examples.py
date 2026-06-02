@@ -47,3 +47,15 @@ def test_frontend_production_healthcheck_uses_node_runtime() -> None:
     assert "fetch('http://127.0.0.1:3000')" in compose
     assert "wget -qO-" not in compose
     assert "curl -f" not in compose
+
+
+def test_cors_origins_are_documented_for_production() -> None:
+    env_example = (ROOT / ".env.example").read_text(encoding="utf-8")
+    compose = (ROOT / "docker-compose.prod.yml").read_text(encoding="utf-8")
+    production_docs = (ROOT / "docs" / "production-installation.md").read_text(
+        encoding="utf-8"
+    )
+
+    assert "CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000" in env_example
+    assert "CORS_ORIGINS: ${CORS_ORIGINS}" in compose
+    assert "CORS_ORIGINS=https://your-domain.example.com" in production_docs

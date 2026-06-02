@@ -164,12 +164,85 @@ Retest status:
 PENDING VM RETEST
 ```
 
+## Real Docker CORS Finding
+
+Acceptance environment:
+
+- Frontend: `http://192.168.1.130:3000`
+- Backend: `http://192.168.1.130:8000`
+
+Observed browser result:
+
+```text
+Failed to fetch
+```
+
+Observed backend logs:
+
+```text
+OPTIONS /auth/register HTTP/1.1 405 Method Not Allowed
+OPTIONS /auth/login HTTP/1.1 405 Method Not Allowed
+```
+
+Root cause:
+
+- The frontend and backend run on different origins because they use different ports.
+- The backend did not have FastAPI CORS middleware configured for the production frontend origin.
+
+Fix applied:
+
+- Added FastAPI `CORSMiddleware`.
+- Added comma-separated `CORS_ORIGINS` support.
+- Added `CORS_ORIGINS` to `.env.example`, `docker-compose.prod.yml`, and `docs/production-installation.md`.
+- Added tests for allowed preflight, allowed CORS response headers, and disallowed origins.
+
+Retest status:
+
+```text
+PENDING VM RETEST
+```
+
+## Real Docker Auth Database Finding
+
+Exact direct backend result:
+
+```text
+POST /auth/register
+503 service_unavailable
+Database operation failed
+```
+
+Root cause:
+
+- Not yet confirmed from this Codex environment because Docker is unavailable.
+- The likely failure is a database/schema/runtime configuration problem after the
+  browser CORS blocker is bypassed.
+
+Fix applied:
+
+- Added structured server-side logging for database operation failures.
+- Kept API responses generic so database exception details are not leaked to users.
+- Added tests verifying database failures are logged while the API-facing
+  exception remains `Database operation failed`.
+
+Verification required:
+
+- Confirm migrations created the `users` table.
+- Confirm `DATABASE_URL` uses `postgresql+psycopg://`.
+- Re-run `POST /auth/register` after migrations on `career-beta`.
+
+Retest status:
+
+```text
+PENDING VM RETEST
+```
+
 ## Scenario Results
 
 | ID | Scenario | Status | Evidence Notes | Workaround / Next Step |
 | --- | --- | --- | --- | --- |
-| 1 | Installation | FAIL | Migration runner failed before fix with `ModuleNotFoundError: No module named 'psycopg2'` because production `DATABASE_URL` examples used bare `postgresql://`. Temporary VM retest with `postgresql+psycopg://...` allowed Alembic to start successfully. Frontend runtime returned `HTTP/1.1 200 OK`, but Docker marked the frontend container unhealthy because the healthcheck used a non-portable command. | Re-run the full installation from the committed PR branch after the `postgresql+psycopg://` and frontend healthcheck fixes. |
-| 2 | First User Registration | BLOCKED | Frontend/backend stack could not be started because migration failed before fix. | Run after installation passes. |
+| 1 | Installation | FAIL | Migration runner failed before fix with `ModuleNotFoundError: No module named 'psycopg2'` because production `DATABASE_URL` examples used bare `postgresql://`. Temporary VM retest with `postgresql+psycopg://...` allowed Alembic to start successfully. Frontend runtime returned `HTTP/1.1 200 OK`, but Docker marked the frontend container unhealthy because the healthcheck used a non-portable command. Frontend healthcheck was fixed locally and now passes on `career-beta`. | Re-run the full installation from the committed PR branch after the `postgresql+psycopg://`, frontend healthcheck, and CORS fixes. |
+| 2 | First User Registration | FAIL | Browser registration failed with `Failed to fetch`; backend logs showed `OPTIONS /auth/register` and `OPTIONS /auth/login` returning `405`. Direct backend registration returned `503 service_unavailable` / `Database operation failed`. | Re-run after setting `CORS_ORIGINS`, recreating backend, confirming migrations, and checking backend logs for database diagnostics. |
 | 3 | Candidate Creation | BLOCKED | Requires authenticated running app. | Run after login passes. |
 | 4 | Job Import | BLOCKED | Requires running backend/frontend. | Run after installation passes. |
 | 5 | Matching | BLOCKED | Requires candidate and job setup. | Run after candidate/job workflows pass. |
@@ -190,19 +263,21 @@ PENDING VM RETEST
 | --- | ---: |
 | Total scenarios | 15 |
 | PASS | 0 |
-| FAIL | 1 |
-| BLOCKED | 14 |
+| FAIL | 2 |
+| BLOCKED | 13 |
 | NOT RUN | 0 |
 
 Pass rate: 0%
 
-The pass rate remains 0% because the installation scenario has not been fully
-re-run from the committed PR branch. The specific `psycopg2` import failure was
-re-tested on `career-beta` and resolved by using `postgresql+psycopg://...`.
+The pass rate remains 0% because installation and first-user registration have
+not been fully re-run from the committed PR branch. The specific `psycopg2`
+import failure was re-tested on `career-beta` and resolved by using
+`postgresql+psycopg://...`; the frontend healthcheck was fixed locally and now
+passes on the VM.
 
 ## Discovered Defects
 
-Two installation defects were confirmed during the real Docker acceptance test.
+Four installation/runtime defects were confirmed during the real Docker acceptance test.
 
 Confirmed issues:
 
@@ -211,6 +286,8 @@ Confirmed issues:
 | PBAT-ENV-001 | High | Test Environment | Docker is unavailable in the current Codex environment. | `docker --version` and `docker compose version` both failed because `docker` was not recognized. |
 | PBAT-009 | High | Migration Runner | Alembic migration runner attempted to load `psycopg2`. | `docker compose --env-file .env.production -f docker-compose.prod.yml run --rm migrations alembic upgrade head` failed with `ModuleNotFoundError: No module named 'psycopg2'`; temporary VM retest with `postgresql+psycopg://...` allowed Alembic to start successfully. |
 | PBAT-010 | Medium | Frontend Healthcheck | Frontend container reported unhealthy even though runtime served `200 OK`. | `docker ps` showed `ai-career-os-frontend-1 unhealthy`, while `curl -I http://127.0.0.1:3000` returned `HTTP/1.1 200 OK`. |
+| PBAT-011 | High | CORS | Browser registration failed due missing CORS preflight support. | Browser showed `Failed to fetch`; backend logged `OPTIONS /auth/register` and `OPTIONS /auth/login` as `405 Method Not Allowed`. |
+| PBAT-012 | High | Database Diagnostics | Direct backend registration returned generic 503 without enough server-side diagnostic detail. | `POST /auth/register` returned `503 service_unavailable` / `Database operation failed` during clean acceptance testing. |
 
 ## Issues Encountered
 
@@ -218,6 +295,8 @@ Confirmed issues:
 - The Codex environment is not clean, so it does not meet the acceptance test environment requirement.
 - The Docker-capable acceptance machine found a migration driver mismatch before the app could start.
 - The Docker-capable acceptance machine found a frontend healthcheck mismatch: frontend runtime passed, container health failed.
+- The Docker-capable acceptance machine found missing CORS preflight support for browser registration/login.
+- Direct backend registration reached the backend but returned a database operation 503 that needs backend log inspection after the diagnostics fix.
 - No screenshots were captured in this session because the app could not be started here.
 
 ## Workaround Notes
@@ -226,10 +305,13 @@ Use a clean VM/laptop for the real acceptance run:
 
 1. Pull the updated PR branch containing the `postgresql+psycopg://` fix.
 2. Recreate the frontend container with the updated Node-native healthcheck.
-3. Re-run the documented migration command on the Docker-capable machine using the committed examples.
-4. Confirm `docker ps` no longer reports the frontend container as unhealthy.
-5. If migration still starts successfully and frontend health is green, continue the acceptance workflow from registration onward.
-6. Record evidence for every scenario in this file.
+3. Set `CORS_ORIGINS` to the browser frontend origin, for example `http://192.168.1.130:3000`.
+4. Recreate the backend container so CORS config is loaded.
+5. Re-run the documented migration command on the Docker-capable machine using the committed examples.
+6. Confirm `docker ps` no longer reports the frontend container as unhealthy.
+7. Re-run browser registration and direct backend registration.
+8. If registration succeeds, continue the acceptance workflow from candidate creation onward.
+9. Record evidence for every scenario in this file.
 
 ## Performance Results
 
@@ -256,7 +338,7 @@ The acceptance run should still capture:
 
 No auth or ownership defect was confirmed.
 
-Security validation remains blocked until the app runs and two-user isolation can be tested.
+Security validation remains blocked until registration/login work and two-user isolation can be tested.
 
 Required follow-up:
 
