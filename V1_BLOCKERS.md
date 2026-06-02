@@ -12,7 +12,9 @@ Reason: The formal clean-environment Private Beta Acceptance Test found
 production blockers in migration configuration and browser CORS. The migration
 driver mismatch, frontend healthcheck, and direct backend register path were
 fixed or verified locally on `career-beta`, but browser auth and the full
-workflow still need to be re-run from the committed fix.
+workflow still need to be re-run from the committed fix. Sprint 14 was released
+as `v0.14.0`, but `career-beta` has not yet been synced to that release and
+still serves the old beta workflow frontend.
 
 ## Required Before v1.0.0 Private Beta Release
 
@@ -29,6 +31,7 @@ workflow still need to be re-run from the committed fix.
 | V1-009 | Medium | Guided workflow completion state not re-tested | Re-run guided beta workflow through package generation, insights, pipeline movement, and outcome recording. | Generate Package, View Insights, and Record Outcome all show completed only after their own successful actions. |
 | V1-010 | Medium | Performance baseline not measured | Measure login, dashboard, and Kanban load times. | Timings are recorded and reviewed for private beta suitability. |
 | V1-011 | Medium | First-time usability review not completed | Have a first-time tester complete the workflow without developer help. | Usability findings are captured and triaged. |
+| V1-012 | High | Production VM not synced to Sprint 14 | Establish shell access to `career-beta`, pull latest `main`, rebuild the production stack, and verify frontend assets. | `career-beta` serves the released `v0.14.0` frontend bundle containing `User Intake Wizard` and no longer serving `Beta Workflow Validation`. |
 
 ## Confirmed Product Blockers
 
@@ -41,7 +44,8 @@ The migration runner driver mismatch was confirmed during acceptance testing:
 - Temporary retest: on `career-beta`, switching `DATABASE_URL` to `postgresql+psycopg://...` allowed Alembic to start successfully and removed the `psycopg2` import failure.
 - Additional findings: browser auth was blocked by missing CORS preflight support. Direct `POST /auth/register` now passes via curl after the `DATABASE_URL` runtime fix.
 - Fix in this PR: configurable FastAPI CORS support, structured server-side database operation logging, and guided workflow completion-state fixes.
-- Remaining blocker: re-test the full installation and registration workflow from the committed PR branch.
+- Sprint 14 release: PR #18 was merged and tag `v0.14.0` exists remotely.
+- Remaining blocker: sync `career-beta` to released `v0.14.0`, then re-test the full installation and registration workflow.
 
 No data-loss defect, authentication defect, or ownership defect has been confirmed yet.
 
@@ -79,4 +83,11 @@ Then recommend:
 
 ```text
 v1.0.0 Private Beta Release
+```
+
+Current recommendation:
+
+```text
+Do not tag v1.0.0 yet.
+First sync career-beta to v0.14.0 and complete the final acceptance run.
 ```

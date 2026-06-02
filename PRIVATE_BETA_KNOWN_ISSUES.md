@@ -10,8 +10,10 @@ This document tracks issues discovered or identified during the Private Beta Acc
 
 One HIGH installation configuration issue was confirmed during real acceptance
 testing and fixed by standardizing PostgreSQL URLs on SQLAlchemy's psycopg v3
-dialect. The remaining blocker is that the full Docker-based production
-installation and workflow have not yet been re-run from the committed fix.
+dialect. Sprint 14 was released as `v0.14.0`, but the full Docker-based
+production installation and workflow have not yet been re-run from the released
+tag because `career-beta` still serves the old frontend bundle and remote shell
+access was not available from the current Codex environment.
 
 ## Known Issues
 
@@ -30,6 +32,7 @@ installation and workflow have not yet been re-run from the committed fix.
 | PBAT-011 | High | CORS | Fixed, Pending VM Re-Test | Browser registration failed with `Failed to fetch` because auth preflight requests returned `405 Method Not Allowed`. | Backend logs showed `OPTIONS /auth/register HTTP/1.1 405 Method Not Allowed` and `OPTIONS /auth/login HTTP/1.1 405 Method Not Allowed` for frontend `http://192.168.1.130:3000` calling backend `http://192.168.1.130:8000`. | Fixed by adding FastAPI CORS middleware and configurable `CORS_ORIGINS`; set `CORS_ORIGINS` to the frontend origin and recreate backend. |
 | PBAT-012 | High | Database Diagnostics | Resolved on VM, Diagnostics Retained | Direct backend registration initially returned `503 service_unavailable` / `Database operation failed`. | After the `DATABASE_URL` runtime fix, direct backend registration passed via curl on `career-beta`. | Server-side exception logging remains in this PR for future database operation failures while API responses stay generic. |
 | PBAT-013 | Medium | Guided Workflow UX | Fixed, Pending VM Re-Test | Guided beta workflow completion state did not mark `Generate Package` and `View Insights` complete. | The workflow reached `outcome recorded`, but those two chips/buttons remained grey/incomplete. | Fixed by wiring package success state, visible workflow errors, and a View Insights workflow action that marks the step complete. |
+| PBAT-014 | High | Production Sync | Open | `career-beta` has not been updated to released `v0.14.0`. | `http://192.168.1.130:3000` and backend health are reachable, but the served frontend bundle still contains `Beta Workflow Validation` and does not contain `User Intake Wizard`. SSH access failed: hostname `career-beta` did not resolve and direct `192.168.1.130` SSH failed host key verification. | Establish VM shell access, run `git checkout main`, `git pull origin main`, rebuild with Docker Compose, and verify the frontend bundle contains `User Intake Wizard` before final acceptance testing. |
 
 ## Critical Issues
 
@@ -44,6 +47,7 @@ None confirmed.
 - PBAT-009: Migration runner failed before fix because SQLAlchemy attempted psycopg2 instead of psycopg v3.
 - PBAT-011: CORS preflight failure blocks browser registration/login.
 - PBAT-012: Direct auth registration initially returned 503, but now passes via curl after the runtime database fix.
+- PBAT-014: Production VM has not been synced to released `v0.14.0`.
 
 PBAT-009 was a confirmed installation blocker and has been fixed in this PR. It
 was temporarily re-tested on `career-beta` by switching `DATABASE_URL` to
@@ -80,3 +84,5 @@ generation and insights viewing. It still needs committed-branch browser re-test
 6. Update `PRIVATE_BETA_TEST_RESULTS.md` with actual evidence.
 7. Reclassify any failed scenario as Critical, High, Medium, or Low.
 8. Reassess `PRIVATE_BETA_READY`.
+9. Confirm `career-beta` serves the Sprint 14 User Intake Wizard before
+   executing the final browser workflow.

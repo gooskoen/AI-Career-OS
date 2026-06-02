@@ -12,6 +12,14 @@ Milestone: Private Beta Acceptance Test
 
 Base under test: current `main` after PR #16 merge, commit `28c482a71837c6f6bd574037040871491a0f18f9`
 
+Latest release status:
+
+- Sprint 14 User Intake Wizard was released after this acceptance document was
+  first created.
+- PR #18 was squash-merged into `main`.
+- Release tag `v0.14.0` exists remotely.
+- Sprint 14 merge commit: `f56483938934c9fda23b34908f5062c9ed3555db`.
+
 Documentation under test:
 
 - `docs/production-installation.md`
@@ -123,6 +131,97 @@ Status after fix:
 PSYCOG2 IMPORT ERROR RESOLVED BY TEMPORARY VM RETEST
 FULL INSTALLATION WORKFLOW STILL PENDING
 ```
+
+## Post-v0.14.0 Production Sync Attempt
+
+Requested post-release production sync target:
+
+- VM/IP: `192.168.1.130`
+- Frontend: `http://192.168.1.130:3000`
+- Backend: `http://192.168.1.130:8000`
+
+Sprint 14 release verification:
+
+```text
+PR #18 merged: YES
+origin/main includes Sprint 14: YES
+local main updated: YES
+remote tag v0.14.0 exists: YES
+```
+
+Connectivity checks from the current Codex environment:
+
+```powershell
+Test-NetConnection -ComputerName 192.168.1.130 -Port 8000
+Test-NetConnection -ComputerName 192.168.1.130 -Port 3000
+Invoke-RestMethod -Uri http://192.168.1.130:8000/health
+Invoke-WebRequest -Uri http://192.168.1.130:3000 -UseBasicParsing
+```
+
+Observed result:
+
+```text
+Port 8000: reachable
+Port 3000: reachable
+Backend health: { status: ok, service: ai-career-os }
+Frontend root: HTTP 200
+```
+
+Production sync blocker:
+
+```powershell
+ssh -o BatchMode=yes -o ConnectTimeout=5 career-beta "hostname"
+ssh -o BatchMode=yes -o ConnectTimeout=5 192.168.1.130 "hostname"
+```
+
+Observed result:
+
+```text
+career-beta hostname: could not resolve
+192.168.1.130 SSH: Host key verification failed
+```
+
+Docker availability in the current Codex environment:
+
+```powershell
+docker --version
+docker compose version
+```
+
+Observed result:
+
+```text
+docker is not recognized
+```
+
+Frontend bundle verification on `career-beta`:
+
+```powershell
+Invoke-WebRequest -Uri http://192.168.1.130:3000 -UseBasicParsing
+Invoke-WebRequest -Uri http://192.168.1.130:3000/assets/index-DJIsdeOh.js -UseBasicParsing
+```
+
+Observed result:
+
+```text
+Frontend bundle contains: Beta Workflow Validation
+Frontend bundle does not contain: User Intake Wizard
+```
+
+Conclusion:
+
+```text
+SPRINT14_RELEASED = YES
+CAREER_BETA_REACHABLE_OVER_HTTP = YES
+CAREER_BETA_SYNCED_TO_V014 = NO
+FINAL_ACCEPTANCE_TEST_EXECUTED = NO
+```
+
+The final acceptance workflow cannot be honestly executed yet because
+`career-beta` still serves the old beta workflow frontend rather than the
+released Sprint 14 User Intake Wizard. The current Codex environment cannot run
+Docker locally and cannot safely execute the requested `git pull` / Docker
+Compose rebuild commands on the VM because SSH access is not established.
 
 ## Real Docker Frontend Healthcheck Finding
 
@@ -336,6 +435,7 @@ Confirmed issues:
 | PBAT-011 | High | CORS | Browser registration failed due missing CORS preflight support. | Browser showed `Failed to fetch`; backend logged `OPTIONS /auth/register` and `OPTIONS /auth/login` as `405 Method Not Allowed`. |
 | PBAT-012 | High | Database Diagnostics | Direct backend registration initially returned generic 503 before the runtime database fix; server-side diagnostics were improved for future failures. | After the `DATABASE_URL` runtime fix, direct backend registration passed via curl. |
 | PBAT-013 | Medium | Guided Workflow UX | Guided beta workflow completion state did not correctly mark `Generate Package` and `View Insights`. | Workflow executed through `outcome recorded`, but those two chips remained grey/incomplete. |
+| PBAT-014 | High | Production Sync | `career-beta` has not been updated to released `v0.14.0`. | Backend and frontend are reachable, but the frontend bundle still contains `Beta Workflow Validation` and does not contain `User Intake Wizard`; SSH access for remote sync failed with host key verification. |
 
 ## Issues Encountered
 
@@ -346,6 +446,9 @@ Confirmed issues:
 - The Docker-capable acceptance machine found missing CORS preflight support for browser registration/login.
 - Direct backend registration passed via curl after the `DATABASE_URL` runtime fix.
 - Guided beta workflow reached outcome recording, but completion state remained misleading for package and insights steps.
+- Sprint 14 was released, but `career-beta` still serves the old frontend bundle.
+- SSH access to `career-beta` is not established from this environment, so the
+  requested production sync commands could not be executed on the VM.
 - No screenshots were captured in this session because the app could not be started here.
 
 ## Workaround Notes
@@ -362,7 +465,9 @@ Use a clean VM/laptop for the real acceptance run:
 8. If browser auth succeeds, continue the acceptance workflow from candidate creation onward.
 9. Generate package and confirm the chip turns complete.
 10. Click View Insights and confirm the chip turns complete after returning to Dashboard.
-11. Record evidence for every scenario in this file.
+11. After Sprint 14, confirm the frontend bundle contains `User Intake Wizard`
+    and no longer contains `Beta Workflow Validation`.
+12. Record evidence for every scenario in this file.
 
 ## Performance Results
 
@@ -422,8 +527,9 @@ Required follow-up:
 
 PRIVATE_BETA_READY = NO
 
-Reason: Installation failed before fix, and only the migration-driver issue has
-been re-tested successfully through the temporary VM workaround. No full
-clean-environment pass evidence exists yet.
+Reason: Sprint 14 is released, but the Docker VM has not been synced to
+`v0.14.0`. The VM remains reachable over HTTP, but it still serves the old beta
+workflow frontend. No full clean-environment acceptance pass evidence exists
+yet.
 
 Recommendation: Do not declare `v1.0.0 Private Beta Release` until the clean-environment acceptance run passes the success criteria.
