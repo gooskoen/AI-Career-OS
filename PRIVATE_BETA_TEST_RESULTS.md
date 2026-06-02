@@ -17,12 +17,15 @@ Documentation under test:
 - `docs/production-installation.md`
 - `docker-compose.prod.yml`
 
-Execution status: FAIL before fix, pending re-test
+Execution status: FAIL before fix, partial VM re-test passed
 
 Reason: A real Docker-capable Private Beta Acceptance Test reached the documented
 migration command and failed before the application runtime workflows could begin.
-The available Codex environment still does not have Docker installed, so the fix
-cannot be re-tested from this session.
+On the clean VM `career-beta`, changing `DATABASE_URL` from `postgresql://...`
+to `postgresql+psycopg://...` allowed Alembic to start successfully and removed
+the `psycopg2` import failure. The available Codex environment still does not
+have Docker installed, so the full installation workflow cannot be re-run from
+this session.
 
 This is a confirmed installation blocker found during acceptance testing and fixed
 in this PR by aligning production `DATABASE_URL` examples with SQLAlchemy's
@@ -92,21 +95,40 @@ Root cause:
 Fix applied:
 
 - Updated `.env.example` to use `postgresql+psycopg://...`.
+- Updated the default `docker-compose.yml` `DATABASE_URL` fallback to use `postgresql+psycopg://...`.
 - Updated `docs/production-installation.md` to use `postgresql+psycopg://...`.
 - Updated `docs/migrations.md` to document that Alembic uses SQLAlchemy with the psycopg v3 dialect.
 - Added a lightweight configuration test to prevent production examples from regressing to bare `postgresql://`.
 
+Temporary VM workaround:
+
+```text
+DATABASE_URL=postgresql+psycopg://...
+```
+
+Retest result on `career-beta`:
+
+```text
+Alembic started successfully. The psycopg2 import error no longer occurred.
+```
+
+Required committed fix:
+
+- Keep all active documented and compose `DATABASE_URL` examples on the psycopg v3 SQLAlchemy dialect.
+- Re-run the full installation and workflow scenarios from the committed PR branch.
+
 Status after fix:
 
 ```text
-PENDING RE-TEST
+PSYCOG2 IMPORT ERROR RESOLVED BY TEMPORARY VM RETEST
+FULL INSTALLATION WORKFLOW STILL PENDING
 ```
 
 ## Scenario Results
 
 | ID | Scenario | Status | Evidence Notes | Workaround / Next Step |
 | --- | --- | --- | --- | --- |
-| 1 | Installation | FAIL | Migration runner failed before fix with `ModuleNotFoundError: No module named 'psycopg2'` because production `DATABASE_URL` examples used bare `postgresql://`. | Re-run installation after the `postgresql+psycopg://` fix in this PR. |
+| 1 | Installation | FAIL | Migration runner failed before fix with `ModuleNotFoundError: No module named 'psycopg2'` because production `DATABASE_URL` examples used bare `postgresql://`. Temporary VM retest with `postgresql+psycopg://...` allowed Alembic to start successfully. | Re-run the full installation from the committed PR branch after the `postgresql+psycopg://` fix. |
 | 2 | First User Registration | BLOCKED | Frontend/backend stack could not be started because migration failed before fix. | Run after installation passes. |
 | 3 | Candidate Creation | BLOCKED | Requires authenticated running app. | Run after login passes. |
 | 4 | Job Import | BLOCKED | Requires running backend/frontend. | Run after installation passes. |
@@ -134,8 +156,9 @@ PENDING RE-TEST
 
 Pass rate: 0%
 
-The pass rate remains 0% because the installation scenario failed before fix and
-all later runtime scenarios are blocked until migration succeeds.
+The pass rate remains 0% because the installation scenario has not been fully
+re-run from the committed PR branch. The specific `psycopg2` import failure was
+re-tested on `career-beta` and resolved by using `postgresql+psycopg://...`.
 
 ## Discovered Defects
 
@@ -146,7 +169,7 @@ Confirmed issues:
 | ID | Severity | Area | Finding | Evidence |
 | --- | --- | --- | --- | --- |
 | PBAT-ENV-001 | High | Test Environment | Docker is unavailable in the current Codex environment. | `docker --version` and `docker compose version` both failed because `docker` was not recognized. |
-| PBAT-009 | High | Migration Runner | Alembic migration runner attempted to load `psycopg2`. | `docker compose --env-file .env.production -f docker-compose.prod.yml run --rm migrations alembic upgrade head` failed with `ModuleNotFoundError: No module named 'psycopg2'`. |
+| PBAT-009 | High | Migration Runner | Alembic migration runner attempted to load `psycopg2`. | `docker compose --env-file .env.production -f docker-compose.prod.yml run --rm migrations alembic upgrade head` failed with `ModuleNotFoundError: No module named 'psycopg2'`; temporary VM retest with `postgresql+psycopg://...` allowed Alembic to start successfully. |
 
 ## Issues Encountered
 
@@ -160,8 +183,8 @@ Confirmed issues:
 Use a clean VM/laptop for the real acceptance run:
 
 1. Pull the updated PR branch containing the `postgresql+psycopg://` fix.
-2. Re-run the documented migration command on the Docker-capable machine.
-3. If migration passes, continue the acceptance workflow from registration onward.
+2. Re-run the documented migration command on the Docker-capable machine using the committed examples.
+3. If migration still starts successfully, continue the acceptance workflow from registration onward.
 4. Record evidence for every scenario in this file.
 
 ## Performance Results
@@ -222,7 +245,8 @@ Required follow-up:
 
 PRIVATE_BETA_READY = NO
 
-Reason: Installation failed before fix and must be re-tested. No clean-environment
-pass evidence exists yet.
+Reason: Installation failed before fix, and only the migration-driver issue has
+been re-tested successfully through the temporary VM workaround. No full
+clean-environment pass evidence exists yet.
 
 Recommendation: Do not declare `v1.0.0 Private Beta Release` until the clean-environment acceptance run passes the success criteria.

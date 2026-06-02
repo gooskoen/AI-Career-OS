@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 def test_database_url_examples_use_psycopg_v3_dialect() -> None:
     checked_files = [
         ROOT / ".env.example",
+        ROOT / "docker-compose.yml",
         ROOT / "docs" / "production-installation.md",
     ]
 
@@ -20,12 +21,12 @@ def test_database_url_examples_use_psycopg_v3_dialect() -> None:
         database_url_lines = [
             line.strip()
             for line in content.splitlines()
-            if line.strip().startswith("DATABASE_URL=")
+            if "DATABASE_URL" in line and "postgresql" in line
         ]
 
         assert database_url_lines, f"{path} should document DATABASE_URL"
         assert all(
-            line.startswith("DATABASE_URL=postgresql+psycopg://")
+            "postgresql+psycopg://" in line
             for line in database_url_lines
         ), f"{path} should use SQLAlchemy's psycopg v3 dialect"
 
