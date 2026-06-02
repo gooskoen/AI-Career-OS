@@ -8,14 +8,15 @@ Licensed under the Apache License, Version 2.0.
 
 PRIVATE_BETA_READY = NO
 
-Reason: The formal clean-environment Private Beta Acceptance Test found
-production blockers in migration configuration and browser CORS. The migration
-driver mismatch, frontend healthcheck, and direct backend register path were
-fixed or verified locally on `career-beta`, but browser auth and the full
-workflow still need to be re-run from the committed fix. Sprint 14 was released
-as `v0.14.0` and the User Intake Wizard is deployed on `career-beta`, but
-browser API calls were blocked by missing CORS middleware/configuration and
-Generate Match failed because the frontend sent an invalid `/match` payload.
+Reason: The clarified V1 product scope is CV-driven job matching and
+application preparation. The current product can support a technical
+end-to-end manual workflow after the remaining acceptance fixes are re-tested,
+but V1 cannot be declared ready until CV import, CV signal extraction, realistic
+vacancy extraction, match quality, CV update recommendations, and cover letter
+quality are validated with realistic mock CV and vacancy examples.
+
+Recruiter CRM is V2. Generic manual candidate entry remains a supportive flow,
+not the core V1 value proposition.
 
 ## Required Before v1.0.0 Private Beta Release
 
@@ -33,6 +34,29 @@ Generate Match failed because the frontend sent an invalid `/match` payload.
 | V1-010 | Medium | Performance baseline not measured | Measure login, dashboard, and Kanban load times. | Timings are recorded and reviewed for private beta suitability. |
 | V1-011 | Medium | First-time usability review not completed | Have a first-time tester complete the workflow without developer help. | Usability findings are captured and triaged. |
 | V1-012 | High | User Intake Wizard match request invalid | Normalize the frontend `/match` payload so saved candidate `display_name` is sent as required `candidate.name`. | Generate Match succeeds after candidate intake and job import, and the UI displays score, strengths, gaps, and recommendations. |
+| V1-013 | High | CV import missing | Add CV text intake as the primary V1 entry point. | User can paste realistic mock CV text and start the matching workflow from it. |
+| V1-014 | High | Skills extraction from CV missing | Extract skills, roles, experience highlights, certifications, domains, and seniority indicators from CV text. | Extracted profile signals match expected fixture outputs for realistic mock CVs. |
+| V1-015 | High | Vacancy skill extraction quality not validated | Validate vacancy extraction for required skills, preferred skills, responsibilities, domains, and seniority indicators. | Realistic vacancy fixtures produce expected extracted requirement signals. |
+| V1-016 | High | Match percentage quality not validated | Validate match percentage and weighted sub-scores against realistic CV/job examples. | Strong, moderate, and weak fixture pairs land in expected match bands with explainable sub-scores. |
+| V1-017 | High | CV update recommendations not validated | Generate and validate deterministic CV update suggestions from match gaps and job requirements. | Suggestions include summary, skills, experience bullet, keyword alignment, and missing evidence guidance. |
+| V1-018 | High | Cover letter generation not validated | Generate and validate deterministic cover letter drafts from candidate, vacancy, strengths, and gaps. | Cover letter draft is professional, specific to the vacancy, and does not leak private or unrelated data. |
+
+## Clarified V1 Product Blockers
+
+The following blockers supersede a purely technical private beta readiness
+decision:
+
+- CV import is not available as a first-class V1 workflow.
+- CV skills and experience signal extraction are not implemented.
+- Vacancy extraction quality has not been validated with realistic job
+  descriptions.
+- Match percentage quality has not been validated against known strong,
+  moderate, and weak CV/job examples.
+- CV update recommendations have not been validated for usefulness.
+- Cover letter generation has not been validated against realistic CV/job input.
+
+These are product-scope blockers, not infrastructure blockers. They should be
+handled in Sprint 15 before any `v1.0.0` private beta recommendation.
 
 ## Confirmed Product Blockers
 
@@ -74,7 +98,8 @@ Do not tag or announce `v1.0.0 Private Beta Release` until:
 - Backup and restore pass.
 - At least 90% of acceptance scenarios pass.
 
-When those conditions are met, update `PRIVATE_BETA_TEST_RESULTS.md` to:
+When those technical and CV-driven product conditions are met, update
+`PRIVATE_BETA_TEST_RESULTS.md` to:
 
 ```text
 PRIVATE_BETA_READY = YES
@@ -90,5 +115,6 @@ Current recommendation:
 
 ```text
 Do not tag v1.0.0 yet.
-First fix and retest split frontend/backend CORS and User Intake Wizard match generation, then complete the final acceptance run.
+First complete Sprint 15 CV-driven intake and matching quality work, then
+re-run the clean-environment acceptance test against realistic CV/job fixtures.
 ```

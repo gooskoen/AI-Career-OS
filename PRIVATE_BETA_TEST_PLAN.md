@@ -10,6 +10,20 @@ Validate that a brand-new user can install, configure, use, back up, restore, an
 
 This is a product validation milestone, not a development sprint.
 
+## V1 Product Scope Clarification
+
+V1 is CV-driven job matching and application preparation.
+
+The acceptance test must prove more than a generic manual candidate workflow. It
+must prove that a user can start from CV content and a vacancy, extract the
+candidate and job signals, generate a credible match, receive useful CV update
+recommendations, generate a cover letter draft, create an application, and track
+that application in the pipeline.
+
+Manual candidate entry is supportive, not core.
+
+Recruiter CRM is V2 and remains out of scope for V1.
+
 ## Scope
 
 In scope:
@@ -17,6 +31,7 @@ In scope:
 - Installation from `docs/production-installation.md` on current `main`
 - First user registration and login
 - Candidate, job, matching, package, application, outcome, pipeline, reporting, backup, restore, and upgrade workflows
+- CV-driven candidate intake, extraction, matching, CV recommendations, and cover letter generation
 - Cross-user ownership isolation
 - Basic performance timing
 - Usability review
@@ -92,6 +107,9 @@ Private Beta Ready if:
 - No installation blockers
 - Backup and restore pass
 - At least 90% of acceptance scenarios pass
+- CV-driven intake and matching scenarios pass with realistic mock CV and vacancy examples
+- Match percentage quality is reviewed against expected match bands
+- CV update recommendations and cover letter generation are validated
 
 ## Scenario Matrix
 
@@ -100,18 +118,19 @@ Private Beta Ready if:
 | 1 | Installation | Docker, Compose, migrations, backend, and frontend start successfully. |
 | 2 | First User Registration | Register, login, logout, and login again all work. |
 | 3 | Candidate Creation | Candidate profile can be created, persists, and reloads. |
-| 4 | Job Import | Job text and URL imports persist jobs. |
-| 5 | Matching | Match generation includes score, gaps, and recommendations. |
-| 6 | Application Package | Package generation and retrieval work. |
-| 7 | Application Lifecycle | Application moves through pipeline states with history, notes, and next actions. |
-| 8 | Outcome Tracking | Outcomes are created, retrieved, and reflected in insights. |
-| 9 | Reporting | Dashboard, funnel, application, outcome, skill, and recommendation analytics load. |
-| 10 | Security | User A cannot access User B data. |
-| 11 | Backup | Backup procedure creates a usable backup file. |
-| 12 | Restore | Restore procedure preserves data and passes smoke test. |
-| 13 | Upgrade | Pull, rebuild, migration, restart, and smoke test succeed. |
-| 14 | Performance | Login, dashboard, and Kanban load times are recorded. |
-| 15 | Usability Review | Confusing screens, unclear instructions, validations, and UX pain points are documented. |
+| 4 | CV Import | User can paste CV text and extract candidate profile, skills, roles, experience highlights, certifications, domains, and seniority indicators. |
+| 5 | Job Import | Job text and URL imports persist jobs and extract job requirements, skills, responsibilities, domains, and seniority indicators. |
+| 6 | Matching | Match generation includes accurate score, weighted sub-scores, gaps, strengths, and recommendations for realistic CV/job examples. |
+| 7 | CV Updates And Cover Letter | CV update recommendations and cover letter draft are generated and useful. |
+| 8 | Application Lifecycle | Application moves through pipeline states with history, notes, and next actions. |
+| 9 | Outcome Tracking | Outcomes are created, retrieved, and reflected in insights. |
+| 10 | Reporting | Dashboard, funnel, application, outcome, skill, and recommendation analytics load. |
+| 11 | Security | User A cannot access User B data. |
+| 12 | Backup | Backup procedure creates a usable backup file. |
+| 13 | Restore | Restore procedure preserves data and passes smoke test. |
+| 14 | Upgrade | Pull, rebuild, migration, restart, and smoke test succeed. |
+| 15 | Performance | Login, dashboard, and Kanban load times are recorded. |
+| 16 | Usability Review | Confusing screens, unclear instructions, validations, and UX pain points are documented. |
 
 ## Detailed Scenarios
 
@@ -147,34 +166,59 @@ Verify:
 - Refresh page.
 - Candidate profile persists and reloads.
 
-### 4. Job Import
+### 4. CV Import
+
+Use realistic mock CV text.
+
+Verify:
+
+- Paste CV text.
+- Candidate profile is extracted.
+- Skills are extracted.
+- Roles are extracted.
+- Experience highlights are extracted.
+- Certifications are extracted when present.
+- Domains are extracted.
+- Seniority indicators are extracted.
+
+### 5. Job Import
 
 Verify:
 
 - Import job from pasted text.
 - Import job from safe public URL.
 - Persisted jobs remain visible after refresh.
+- Required skills are extracted.
+- Preferred skills are extracted.
+- Responsibilities are extracted.
+- Domain keywords are extracted.
+- Seniority indicators are extracted.
 
-### 5. Matching
+### 6. Matching
 
 Verify:
 
 - Generate match.
-- Structured score appears.
+- Overall match percentage appears.
+- Weighted sub-scores appear.
+- Strengths appear.
 - Gap analysis appears.
 - Recommendations are actionable.
+- Match band is plausible for the realistic CV/job fixture.
 
-### 6. Application Package
+### 7. CV Updates And Cover Letter
 
 Verify:
 
-- Generate application package.
-- Tailored summary appears.
+- Summary update suggestion appears.
+- Skills section update suggestion appears.
+- Experience bullet suggestions appear.
+- Keyword alignment suggestions appear.
+- Missing evidence warnings appear where appropriate.
 - Cover letter draft appears.
-- Talking points appear.
-- Package can be retrieved or viewed again.
+- Cover letter uses candidate strengths and vacancy requirements.
 
-### 7. Application Lifecycle
+### 8. Application Lifecycle
 
 Create an application and move through:
 
@@ -193,7 +237,7 @@ Verify:
 - Notes can be added.
 - Summary reflects current state.
 
-### 8. Outcome Tracking
+### 9. Outcome Tracking
 
 Verify:
 
@@ -201,7 +245,7 @@ Verify:
 - Retrieve outcome history.
 - Candidate insights update.
 
-### 9. Reporting
+### 10. Reporting
 
 Verify:
 
@@ -212,7 +256,7 @@ Verify:
 - Skills analytics load.
 - Recommendation analytics load.
 
-### 10. Security
+### 11. Security
 
 Create User A and User B.
 
@@ -222,7 +266,7 @@ Verify User A cannot access User B:
 - applications
 - reporting
 
-### 11. Backup
+### 12. Backup
 
 Follow backup instructions in `docs/production-installation.md`.
 
@@ -232,7 +276,7 @@ Verify:
 - Backup file exists.
 - Backup file is non-empty.
 
-### 12. Restore
+### 13. Restore
 
 Follow restore instructions in `docs/production-installation.md`.
 
@@ -244,7 +288,7 @@ Verify:
 - Application list or Kanban loads after restore.
 - Previously created test data is preserved.
 
-### 13. Upgrade
+### 14. Upgrade
 
 Follow upgrade instructions in `docs/production-installation.md`.
 
@@ -256,7 +300,7 @@ Verify:
 - Services restart.
 - Smoke test passes.
 
-### 14. Performance
+### 15. Performance
 
 Measure:
 
@@ -264,7 +308,7 @@ Measure:
 - Dashboard load time
 - Kanban load time
 
-### 15. Usability Review
+### 16. Usability Review
 
 Document:
 
@@ -272,6 +316,20 @@ Document:
 - unclear instructions
 - missing validations
 - UX pain points
+
+## Legacy Generic Workflow Checks
+
+The following checks remain useful but are no longer sufficient for V1 readiness.
+
+### Application Package
+
+Verify:
+
+- Generate application package.
+- Tailored summary appears.
+- Cover letter draft appears.
+- Talking points appear.
+- Package can be retrieved or viewed again.
 
 ## Exit Criteria
 

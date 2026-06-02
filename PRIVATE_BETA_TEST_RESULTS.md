@@ -39,6 +39,30 @@ This is a confirmed installation blocker found during acceptance testing and fix
 in this PR by aligning production `DATABASE_URL` examples with SQLAlchemy's
 psycopg v3 dialect.
 
+## V1 Product Scope Assessment
+
+The private beta test proved that the platform can move toward a technically
+working end-to-end application flow. However, the clarified V1 product definition
+is CV-driven matching and application preparation.
+
+Current V1 product readiness:
+
+```text
+V1_PRODUCT_READY = NO
+```
+
+Reason:
+
+- CV import is missing.
+- Skills extraction from CV text is missing.
+- Vacancy skill extraction quality has not been validated with realistic examples.
+- Match percentage quality has not been validated against realistic CV/job examples.
+- CV update recommendations have not been validated.
+- Cover letter generation has not been validated against realistic CV/job inputs.
+
+Manual candidate entry and the User Intake Wizard remain useful as supporting
+flows, but they are not sufficient for V1 readiness.
+
 ## Environment Checked
 
 Current execution environment:
@@ -419,27 +443,32 @@ PENDING VM RETEST
 | 1 | Installation | FAIL | Migration runner failed before fix with `ModuleNotFoundError: No module named 'psycopg2'` because production `DATABASE_URL` examples used bare `postgresql://`. Temporary VM retest with `postgresql+psycopg://...` allowed Alembic to start successfully. Frontend runtime returned `HTTP/1.1 200 OK`, but Docker marked the frontend container unhealthy because the healthcheck used a non-portable command. Frontend healthcheck was fixed locally and now passes on `career-beta`. | Re-run the full installation from the committed PR branch after the `postgresql+psycopg://`, frontend healthcheck, and CORS fixes. |
 | 2 | First User Registration | FAIL | Direct backend registration passed via curl after the `DATABASE_URL` runtime fix. Browser registration/login still failed with `Failed to fetch`; backend logs showed `OPTIONS /auth/register` and `OPTIONS /auth/login` returning `405`. | Re-run browser registration/login after setting `CORS_ORIGINS` and recreating backend from the committed branch. |
 | 3 | Candidate Creation | BLOCKED | Requires authenticated running app. | Run after login passes. |
-| 4 | Job Import | PARTIAL PASS | Job text import passed on `career-beta`; job URL import still needs final acceptance evidence. | Re-run both text and URL import after CORS and match fixes are deployed. |
-| 5 | Matching | FAIL | Generate Match returned `Request validation failed` because the frontend sent a saved candidate object with `display_name` instead of the `/match` contract's required `candidate.name`. | Re-run after frontend match payload normalization is deployed. |
-| 6 | Application Package | BLOCKED | Requires match result and running app. | Run after matching passes. |
-| 7 | Application Lifecycle | FAIL | Guided workflow reached application creation, pipeline movement, and outcome recording, but `Generate Package` and `View Insights` chips remained incomplete. Backend workflow remained functional. | Re-run after frontend guided workflow state fix. |
-| 8 | Outcome Tracking | FAIL | UI displayed `outcome recorded`, but unresolved workflow steps stayed grey, making completion state misleading. | Re-run after frontend guided workflow state fix. |
-| 9 | Reporting | BLOCKED | Insights are accessible through navigation, but the guided workflow did not mark View Insights complete. | Re-run after frontend guided workflow state fix. |
-| 10 | Security | BLOCKED | Requires two running authenticated users. | Run User A/User B isolation after installation. |
-| 11 | Backup | BLOCKED | Requires live PostgreSQL container and completed installation. | Run after data exists in PostgreSQL. |
-| 12 | Restore | BLOCKED | Requires backup artifact and live PostgreSQL container. | Run after backup passes. |
-| 13 | Upgrade | BLOCKED | Requires deployed app and Docker Compose. | Run after initial deployment passes. |
-| 14 | Performance | BLOCKED | Requires browser access to running app. | Measure after app is running. |
-| 15 | Usability Review | BLOCKED | Requires first-time user walkthrough. | Assign tester with clean environment. |
+| 4 | CV Import | FAIL | V1 requires CV-driven intake, but CV import is not implemented yet. | Sprint 15 should add pasted CV text intake. |
+| 5 | CV Skills Extraction | FAIL | Skills, roles, experience highlights, certifications, domains, and seniority indicators are not extracted from CV text yet. | Sprint 15 should add deterministic CV extraction. |
+| 6 | Job Import | PARTIAL PASS | Job text import passed on `career-beta`; job URL import still needs final acceptance evidence. Vacancy extraction quality has not been validated. | Re-run both text and URL import and validate extracted requirements/skills. |
+| 7 | Vacancy Requirement Extraction | FAIL | Required/preferred skills, responsibilities, domains, and seniority indicators have not been validated against realistic vacancy examples. | Sprint 15 should improve and test extraction quality. |
+| 8 | Matching | FAIL | Generate Match returned `Request validation failed`; additionally, match percentage quality has not been validated against realistic CV/job examples. | Re-run after payload fix and add realistic match-band fixtures. |
+| 9 | CV Updates And Cover Letter | FAIL | CV update recommendations and cover letter generation have not been validated from realistic CV/job inputs. | Sprint 15 should add deterministic CV suggestions and validate cover letter output. |
+| 10 | Application Package | BLOCKED | Requires match result and running app. | Run after matching passes. |
+| 11 | Application Lifecycle | FAIL | Guided workflow reached application creation, pipeline movement, and outcome recording, but `Generate Package` and `View Insights` chips remained incomplete. Backend workflow remained functional. | Re-run after frontend guided workflow state fix. |
+| 12 | Outcome Tracking | FAIL | UI displayed `outcome recorded`, but unresolved workflow steps stayed grey, making completion state misleading. | Re-run after frontend guided workflow state fix. |
+| 13 | Reporting | BLOCKED | Insights are accessible through navigation, but the guided workflow did not mark View Insights complete. | Re-run after frontend guided workflow state fix. |
+| 14 | Security | BLOCKED | Requires two running authenticated users. | Run User A/User B isolation after installation. |
+| 15 | Backup | BLOCKED | Requires live PostgreSQL container and completed installation. | Run after data exists in PostgreSQL. |
+| 16 | Restore | BLOCKED | Requires backup artifact and live PostgreSQL container. | Run after backup passes. |
+| 17 | Upgrade | BLOCKED | Requires deployed app and Docker Compose. | Run after initial deployment passes. |
+| 18 | Performance | BLOCKED | Requires browser access to running app. | Measure after app is running. |
+| 19 | Usability Review | BLOCKED | Requires first-time user walkthrough. | Assign tester with clean environment. |
 
 ## Pass / Fail Summary
 
 | Metric | Count |
 | --- | ---: |
-| Total scenarios | 15 |
+| Total scenarios | 19 |
 | PASS | 0 |
-| FAIL | 4 |
-| BLOCKED | 11 |
+| PARTIAL PASS | 1 |
+| FAIL | 9 |
+| BLOCKED | 9 |
 | NOT RUN | 0 |
 
 Pass rate: 0%
@@ -448,7 +477,9 @@ The pass rate remains 0% because installation and first-user registration have
 not been fully re-run from the committed PR branch. The specific `psycopg2`
 import failure was re-tested on `career-beta` and resolved by using
 `postgresql+psycopg://...`; the frontend healthcheck was fixed locally and now
-passes on the VM.
+passes on the VM. Job text import has partial evidence, but it does not count
+as a full scenario pass because URL import and vacancy extraction quality still
+need realistic fixture validation.
 
 ## Discovered Defects
 
@@ -480,6 +511,10 @@ Confirmed issues:
 - Browser API calls remain blocked by missing CORS middleware/configuration.
 - Candidate intake and job text import pass, but match generation fails until
   the frontend normalizes the candidate payload for `/match`.
+- CV import and CV extraction are missing, which blocks V1 product readiness
+  even if the generic manual candidate workflow becomes technically functional.
+- Match percentage quality, CV update recommendations, and cover letter quality
+  still need realistic CV/job fixture validation.
 - No screenshots were captured in this session because the app could not be started here.
 
 ## Workaround Notes
@@ -502,7 +537,10 @@ Use a clean VM/laptop for the real acceptance run:
     `Access-Control-Allow-Origin`.
 14. Re-run Generate Match and confirm readable score, strengths, gaps, and
     recommendations render.
-15. Record evidence for every scenario in this file.
+15. Add realistic mock CV and vacancy fixtures.
+16. Validate CV extraction, vacancy extraction, match bands, CV update
+    recommendations, and cover letter generation.
+17. Record evidence for every scenario in this file.
 
 ## Performance Results
 
@@ -556,7 +594,8 @@ Required follow-up:
 1. Re-run installation on a Docker-capable acceptance machine after this fix.
 2. Keep PR #17 draft until actual scenario evidence is captured.
 3. Do not tag `v1.0.0` until installation, backup, restore, ownership, and at least 90% of scenarios pass.
-4. If another scenario fails, convert it into a concrete defect in `PRIVATE_BETA_KNOWN_ISSUES.md` and update `V1_BLOCKERS.md`.
+4. Complete Sprint 15 CV-driven intake and matching quality work before the V1 readiness decision.
+5. If another scenario fails, convert it into a concrete defect in `PRIVATE_BETA_KNOWN_ISSUES.md` and update `V1_BLOCKERS.md`.
 
 ## Final Decision
 
@@ -565,7 +604,9 @@ PRIVATE_BETA_READY = NO
 Reason: Sprint 14 is released and the User Intake Wizard is deployed on
 `career-beta`, but browser API calls were blocked by missing CORS
 middleware/configuration and Generate Match failed because the frontend sent an
-invalid `/match` candidate payload. No full clean-environment acceptance pass
-evidence exists yet.
+invalid `/match` candidate payload. More importantly, clarified V1 scope requires
+CV-driven matching, and CV import, CV extraction, realistic match quality
+validation, CV update validation, and cover letter validation are still missing.
+No full clean-environment V1 acceptance pass evidence exists yet.
 
 Recommendation: Do not declare `v1.0.0 Private Beta Release` until the clean-environment acceptance run passes the success criteria.
