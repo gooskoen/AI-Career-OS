@@ -132,7 +132,7 @@ PSYCOG2 IMPORT ERROR RESOLVED BY TEMPORARY VM RETEST
 FULL INSTALLATION WORKFLOW STILL PENDING
 ```
 
-## Post-v0.14.0 Production Sync Attempt
+## Post-v0.14.0 Browser CORS Re-Test
 
 Requested post-release production sync target:
 
@@ -167,45 +167,14 @@ Backend health: { status: ok, service: ai-career-os }
 Frontend root: HTTP 200
 ```
 
-Production sync blocker:
-
-```powershell
-ssh -o BatchMode=yes -o ConnectTimeout=5 career-beta "hostname"
-ssh -o BatchMode=yes -o ConnectTimeout=5 192.168.1.130 "hostname"
-```
-
-Observed result:
+Latest VM validation:
 
 ```text
-career-beta hostname: could not resolve
-192.168.1.130 SSH: Host key verification failed
-```
-
-Docker availability in the current Codex environment:
-
-```powershell
-docker --version
-docker compose version
-```
-
-Observed result:
-
-```text
-docker is not recognized
-```
-
-Frontend bundle verification on `career-beta`:
-
-```powershell
-Invoke-WebRequest -Uri http://192.168.1.130:3000 -UseBasicParsing
-Invoke-WebRequest -Uri http://192.168.1.130:3000/assets/index-DJIsdeOh.js -UseBasicParsing
-```
-
-Observed result:
-
-```text
-Frontend bundle contains: Beta Workflow Validation
-Frontend bundle does not contain: User Intake Wizard
+User Intake Wizard deployed: YES
+Direct backend curl works: YES
+.env.production contains CORS_ORIGINS=http://192.168.1.130:3000
+docker-compose.prod.yml contains CORS_ORIGINS: NO
+backend/app contains CORSMiddleware: NO
 ```
 
 Conclusion:
@@ -213,15 +182,17 @@ Conclusion:
 ```text
 SPRINT14_RELEASED = YES
 CAREER_BETA_REACHABLE_OVER_HTTP = YES
-CAREER_BETA_SYNCED_TO_V014 = NO
+CAREER_BETA_SYNCED_TO_V014 = YES
+USER_INTAKE_WIZARD_DEPLOYED = YES
+DIRECT_BACKEND_CURL = PASS
+BROWSER_API_CALLS = FAIL
 FINAL_ACCEPTANCE_TEST_EXECUTED = NO
 ```
 
-The final acceptance workflow cannot be honestly executed yet because
-`career-beta` still serves the old beta workflow frontend rather than the
-released Sprint 14 User Intake Wizard. The current Codex environment cannot run
-Docker locally and cannot safely execute the requested `git pull` / Docker
-Compose rebuild commands on the VM because SSH access is not established.
+The final acceptance workflow cannot be honestly completed yet because browser
+API calls from `http://192.168.1.130:3000` to `http://192.168.1.130:8000` are
+blocked by missing CORS middleware/configuration. Backend health, frontend load,
+User Intake Wizard deployment, and direct backend curl are passing.
 
 ## Real Docker Frontend Healthcheck Finding
 
@@ -260,7 +231,22 @@ node -e "fetch('http://127.0.0.1:3000').then(r=>process.exit(r.ok?0:1)).catch(()
 Retest status:
 
 ```text
-PENDING VM RETEST
+FAILED VM BROWSER RETEST
+```
+
+Latest VM evidence:
+
+```text
+Frontend: http://192.168.1.130:3000
+Backend: http://192.168.1.130:8000
+Backend health: PASS
+Frontend loads: PASS
+User Intake Wizard deployed: PASS
+Direct backend curl: PASS
+Browser API calls: FAIL
+Browser error: No 'Access-Control-Allow-Origin' header is present.
+grep CORS docker-compose.prod.yml: no result
+grep CORSMiddleware -R backend/app: no result
 ```
 
 ## Real Docker CORS Finding
@@ -432,10 +418,10 @@ Confirmed issues:
 | PBAT-ENV-001 | High | Test Environment | Docker is unavailable in the current Codex environment. | `docker --version` and `docker compose version` both failed because `docker` was not recognized. |
 | PBAT-009 | High | Migration Runner | Alembic migration runner attempted to load `psycopg2`. | `docker compose --env-file .env.production -f docker-compose.prod.yml run --rm migrations alembic upgrade head` failed with `ModuleNotFoundError: No module named 'psycopg2'`; temporary VM retest with `postgresql+psycopg://...` allowed Alembic to start successfully. |
 | PBAT-010 | Medium | Frontend Healthcheck | Frontend container reported unhealthy even though runtime served `200 OK`. | `docker ps` showed `ai-career-os-frontend-1 unhealthy`, while `curl -I http://127.0.0.1:3000` returned `HTTP/1.1 200 OK`. |
-| PBAT-011 | High | CORS | Browser registration failed due missing CORS preflight support. | Browser showed `Failed to fetch`; backend logged `OPTIONS /auth/register` and `OPTIONS /auth/login` as `405 Method Not Allowed`. |
+| PBAT-011 | High | CORS | Browser API calls are blocked in split frontend/backend deployment. | Frontend and backend are healthy, User Intake Wizard is deployed, and direct backend curl works, but browser calls fail because no `Access-Control-Allow-Origin` header is present. VM validation showed `docker-compose.prod.yml` does not pass `CORS_ORIGINS` and backend has no `CORSMiddleware`. |
 | PBAT-012 | High | Database Diagnostics | Direct backend registration initially returned generic 503 before the runtime database fix; server-side diagnostics were improved for future failures. | After the `DATABASE_URL` runtime fix, direct backend registration passed via curl. |
 | PBAT-013 | Medium | Guided Workflow UX | Guided beta workflow completion state did not correctly mark `Generate Package` and `View Insights`. | Workflow executed through `outcome recorded`, but those two chips remained grey/incomplete. |
-| PBAT-014 | High | Production Sync | `career-beta` has not been updated to released `v0.14.0`. | Backend and frontend are reachable, but the frontend bundle still contains `Beta Workflow Validation` and does not contain `User Intake Wizard`; SSH access for remote sync failed with host key verification. |
+| PBAT-014 | High | Production Sync | Resolved: `career-beta` now has the Sprint 14 User Intake Wizard deployed. | Latest VM validation confirms User Intake Wizard is deployed. Remaining blocker is PBAT-011 CORS. |
 
 ## Issues Encountered
 
@@ -446,9 +432,8 @@ Confirmed issues:
 - The Docker-capable acceptance machine found missing CORS preflight support for browser registration/login.
 - Direct backend registration passed via curl after the `DATABASE_URL` runtime fix.
 - Guided beta workflow reached outcome recording, but completion state remained misleading for package and insights steps.
-- Sprint 14 was released, but `career-beta` still serves the old frontend bundle.
-- SSH access to `career-beta` is not established from this environment, so the
-  requested production sync commands could not be executed on the VM.
+- Sprint 14 User Intake Wizard is deployed on `career-beta`.
+- Browser API calls remain blocked by missing CORS middleware/configuration.
 - No screenshots were captured in this session because the app could not be started here.
 
 ## Workaround Notes
@@ -465,9 +450,11 @@ Use a clean VM/laptop for the real acceptance run:
 8. If browser auth succeeds, continue the acceptance workflow from candidate creation onward.
 9. Generate package and confirm the chip turns complete.
 10. Click View Insights and confirm the chip turns complete after returning to Dashboard.
-11. After Sprint 14, confirm the frontend bundle contains `User Intake Wizard`
-    and no longer contains `Beta Workflow Validation`.
-12. Record evidence for every scenario in this file.
+11. Confirm `docker-compose.prod.yml` passes `CORS_ORIGINS` to backend.
+12. Confirm backend includes FastAPI `CORSMiddleware`.
+13. Rebuild/recreate backend and verify browser API calls include
+    `Access-Control-Allow-Origin`.
+14. Record evidence for every scenario in this file.
 
 ## Performance Results
 
@@ -527,9 +514,9 @@ Required follow-up:
 
 PRIVATE_BETA_READY = NO
 
-Reason: Sprint 14 is released, but the Docker VM has not been synced to
-`v0.14.0`. The VM remains reachable over HTTP, but it still serves the old beta
-workflow frontend. No full clean-environment acceptance pass evidence exists
-yet.
+Reason: Sprint 14 is released and the User Intake Wizard is deployed on
+`career-beta`, but browser API calls are blocked by missing CORS
+middleware/configuration in the split frontend/backend deployment. No full
+clean-environment acceptance pass evidence exists yet.
 
 Recommendation: Do not declare `v1.0.0 Private Beta Release` until the clean-environment acceptance run passes the success criteria.

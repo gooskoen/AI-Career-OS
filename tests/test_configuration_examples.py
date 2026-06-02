@@ -57,5 +57,8 @@ def test_cors_origins_are_documented_for_production() -> None:
     )
 
     assert "CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000" in env_example
-    assert "CORS_ORIGINS: ${CORS_ORIGINS}" in compose
+    assert (
+        "CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}"
+        in compose
+    )
     assert "CORS_ORIGINS=https://your-domain.example.com" in production_docs

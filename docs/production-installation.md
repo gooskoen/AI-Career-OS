@@ -102,6 +102,10 @@ CORS_ORIGINS=http://192.168.1.130:3000
 Do not use `*` for `CORS_ORIGINS` in production. List the exact frontend origins
 that browsers will use.
 
+The production Docker Compose file passes `CORS_ORIGINS` into the backend
+service. If the variable is missing, the backend only allows local development
+origins: `http://localhost:3000` and `http://127.0.0.1:3000`.
+
 ### Generate A Strong AUTH_SECRET
 
 Use one of these commands:

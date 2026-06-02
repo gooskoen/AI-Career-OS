@@ -46,6 +46,7 @@ def test_auth_register_preflight_allows_configured_frontend_origin() -> None:
 
     assert response.status_code == 200
     assert response.headers["access-control-allow-origin"] == "http://localhost:3000"
+    assert response.headers["access-control-allow-credentials"] == "true"
     assert "POST" in response.headers["access-control-allow-methods"]
 
 
@@ -72,6 +73,7 @@ def test_auth_register_response_includes_cors_for_allowed_origin(monkeypatch) ->
 
     assert response.status_code == 409
     assert response.headers["access-control-allow-origin"] == "http://localhost:3000"
+    assert response.headers["access-control-allow-credentials"] == "true"
 
 
 def test_disallowed_origin_does_not_receive_permissive_cors() -> None:

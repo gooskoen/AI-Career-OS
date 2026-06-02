@@ -13,8 +13,8 @@ production blockers in migration configuration and browser CORS. The migration
 driver mismatch, frontend healthcheck, and direct backend register path were
 fixed or verified locally on `career-beta`, but browser auth and the full
 workflow still need to be re-run from the committed fix. Sprint 14 was released
-as `v0.14.0`, but `career-beta` has not yet been synced to that release and
-still serves the old beta workflow frontend.
+as `v0.14.0` and the User Intake Wizard is deployed on `career-beta`, but
+browser API calls are blocked by missing CORS middleware/configuration.
 
 ## Required Before v1.0.0 Private Beta Release
 
@@ -23,15 +23,14 @@ still serves the old beta workflow frontend.
 | V1-001 | High | Clean-environment acceptance test not executed | Run `PRIVATE_BETA_TEST_PLAN.md` on a clean Windows or Linux VM/laptop with Docker. | All scenarios have PASS / FAIL / BLOCKED evidence in `PRIVATE_BETA_TEST_RESULTS.md`. |
 | V1-002 | High | Migration runner failed before fix | Re-run `docker compose --env-file .env.production -f docker-compose.prod.yml run --rm migrations alembic upgrade head` from the committed `postgresql+psycopg://` fix. | Migration runner completes without `psycopg2` import errors using the documented committed configuration. |
 | V1-003 | High | Installation not proven after migration fix | Follow `docs/production-installation.md` exactly on clean environment. | Docker, Compose startup, migrations, backend health, and frontend load pass. |
-| V1-004 | High | Browser auth blocked by CORS before fix | Set `CORS_ORIGINS` to the frontend browser origin and recreate backend from the committed branch. | Browser registration/login no longer show `Failed to fetch`; preflight requests succeed. |
-| V1-005 | High | Browser auth not re-tested after CORS fix | Re-run browser register/login from `http://192.168.1.130:3000` against backend `http://192.168.1.130:8000`. | Browser registration/login succeed with `Access-Control-Allow-Origin` for the configured frontend origin. |
+| V1-004 | High | Browser API calls blocked by missing CORS middleware/configuration | Add FastAPI `CORSMiddleware`, pass `CORS_ORIGINS` to backend in production compose, and recreate backend from the committed branch. | Browser calls from `http://192.168.1.130:3000` to `http://192.168.1.130:8000` receive `Access-Control-Allow-Origin` for the configured frontend origin. |
+| V1-005 | High | Browser auth not re-tested after CORS fix | Re-run browser register/login from `http://192.168.1.130:3000` against backend `http://192.168.1.130:8000`. | Browser registration/login succeed and no longer fail with missing `Access-Control-Allow-Origin`. |
 | V1-006 | High | Backup and restore not proven | Execute backup and restore scenarios with real PostgreSQL container data. | Backup file exists, restore completes, login/dashboard/application list work after restore. |
 | V1-007 | High | Ownership isolation not proven | Execute User A / User B data isolation scenario. | User A cannot access User B candidates, applications, or reporting. |
 | V1-008 | High | Upgrade path not proven | Execute documented upgrade flow. | `git pull`, rebuild, migration runner, restart, and smoke test pass. |
 | V1-009 | Medium | Guided workflow completion state not re-tested | Re-run guided beta workflow through package generation, insights, pipeline movement, and outcome recording. | Generate Package, View Insights, and Record Outcome all show completed only after their own successful actions. |
 | V1-010 | Medium | Performance baseline not measured | Measure login, dashboard, and Kanban load times. | Timings are recorded and reviewed for private beta suitability. |
 | V1-011 | Medium | First-time usability review not completed | Have a first-time tester complete the workflow without developer help. | Usability findings are captured and triaged. |
-| V1-012 | High | Production VM not synced to Sprint 14 | Establish shell access to `career-beta`, pull latest `main`, rebuild the production stack, and verify frontend assets. | `career-beta` serves the released `v0.14.0` frontend bundle containing `User Intake Wizard` and no longer serving `Beta Workflow Validation`. |
 
 ## Confirmed Product Blockers
 
@@ -44,8 +43,8 @@ The migration runner driver mismatch was confirmed during acceptance testing:
 - Temporary retest: on `career-beta`, switching `DATABASE_URL` to `postgresql+psycopg://...` allowed Alembic to start successfully and removed the `psycopg2` import failure.
 - Additional findings: browser auth was blocked by missing CORS preflight support. Direct `POST /auth/register` now passes via curl after the `DATABASE_URL` runtime fix.
 - Fix in this PR: configurable FastAPI CORS support, structured server-side database operation logging, and guided workflow completion-state fixes.
-- Sprint 14 release: PR #18 was merged and tag `v0.14.0` exists remotely.
-- Remaining blocker: sync `career-beta` to released `v0.14.0`, then re-test the full installation and registration workflow.
+- Sprint 14 release: PR #18 was merged, tag `v0.14.0` exists remotely, and User Intake Wizard is deployed on `career-beta`.
+- Remaining blocker: fix CORS for the split frontend/backend deployment, then re-test the full installation and registration workflow.
 
 No data-loss defect, authentication defect, or ownership defect has been confirmed yet.
 
@@ -89,5 +88,5 @@ Current recommendation:
 
 ```text
 Do not tag v1.0.0 yet.
-First sync career-beta to v0.14.0 and complete the final acceptance run.
+First fix and retest split frontend/backend CORS, then complete the final acceptance run.
 ```
