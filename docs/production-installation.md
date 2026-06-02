@@ -73,6 +73,26 @@ Recommended server ports:
 
 ## 3. Environment Setup
 
+Clone de repo:
+
+```bash
+cd ~
+git clone https://github.com/gooskoen/AI-Career-OS.git
+cd AI-Career-OS
+```
+
+Controle:
+
+```bash
+git describe --tags
+```
+
+Ik verwacht:
+
+```bash
+v0.13.0
+```
+
 Create a production environment file:
 
 ```bash
