@@ -57,10 +57,20 @@ Applications:
 - `GET /applications/board`
 - `POST /applications/{id}/transition`
 - `GET /applications/{id}/summary`
+- `POST /applications`
+- `POST /applications/package`
 
 Profile:
 
 - `GET /candidates`
+- `POST /candidates`
+
+Intake:
+
+- `POST /jobs/import-text`
+- `POST /jobs/import-url`
+- `POST /match`
+- `POST /matches/persist`
 
 ## Component Hierarchy
 
@@ -72,6 +82,7 @@ App
     +-- DashboardPage
     |   +-- Metric
     |   +-- FunnelSummary
+    |   +-- IntakeWizard
     +-- ApplicationsPage
     |   +-- Kanban lanes
     |   +-- ApplicationDetail
@@ -100,7 +111,7 @@ The application board renders the existing pipeline statuses:
 Cards can be dragged between lanes. Dropping a card calls
 `POST /applications/{id}/transition`; the board is then reloaded from the backend.
 
-## Beta Workflow
+## Intake Wizard
 
 The UI is designed to support the private beta workflow:
 
@@ -108,10 +119,13 @@ Register -> Login -> Create Candidate -> Import Job -> Review Match -> Generate
 Package -> Create Application -> Move Through Pipeline -> Record Outcome -> View
 Insights.
 
-Sprint 13 includes a guided beta workflow panel that calls the existing APIs for
-candidate creation, job import, match review, package generation, application
-creation, pipeline movement, and outcome recording. It remains API-first and does not
-duplicate backend scoring or workflow rules.
+Sprint 14 replaces the hardcoded demo workflow with a real user intake wizard. The
+wizard calls the existing APIs for candidate creation, job text import, job URL
+import, match preview, persisted match creation, application package generation, and
+application creation. It remains API-first and does not duplicate backend scoring or
+workflow rules.
+
+See `docs/intake-wizard.md` for the detailed API mapping.
 
 ## Guardrails
 

@@ -1,10 +1,14 @@
 import type {
   ApplicationBoard,
+  ApplicationPackage,
   ApplicationSummary,
   AuthResponse,
   CandidateProfile,
   DashboardReport,
   FunnelReport,
+  JobImportResult,
+  JobRecord,
+  MatchResult,
   OutcomeReport,
   PipelineStatus,
   RecommendationReport,
@@ -49,7 +53,15 @@ async function request<T>(
     headers.set("Authorization", `Bearer ${token}`);
   }
 
-  const response = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  } catch (caught) {
+    const message = caught instanceof Error ? caught.message : "network error";
+    throw new Error(
+      `Unable to reach the API. Check backend URL, network access, and CORS settings. (${message})`
+    );
+  }
   if (response.status === 401 && retry && sessionStorage.getItem(REFRESH_TOKEN_KEY)) {
     await refreshSession();
     return request<T>(path, options, false);
@@ -158,19 +170,7 @@ export const api = {
   },
 
   importJob(rawText: string, candidateId?: string) {
-    return request<{
-      job: {
-        id: string;
-        title: string;
-        company: string;
-        location?: string;
-        description: string;
-        required_skills: string[];
-        nice_to_have_skills: string[];
-      };
-      duplicate: boolean;
-      match?: { id: string } | null;
-    }>("/jobs/import-text", {
+    return request<JobImportResult>("/jobs/import-text", {
       method: "POST",
       body: JSON.stringify({
         raw_text: rawText,
@@ -179,21 +179,45 @@ export const api = {
     });
   },
 
-  createMatch(candidateId: string, jobId: string) {
-    return request<{ id: string; score?: number; strengths?: string[]; gaps?: unknown[] }>(
-      "/matches/persist",
-      {
-        method: "POST",
-        body: JSON.stringify({
-          candidate_profile_id: candidateId,
-          job_description_id: jobId
-        })
-      }
-    );
+  importJobText(rawText: string, candidateId?: string) {
+    return request<JobImportResult>("/jobs/import-text", {
+      method: "POST",
+      body: JSON.stringify({
+        raw_text: rawText,
+        match_candidate_id: candidateId
+      })
+    });
   },
 
-  generatePackage(candidate: CandidateProfile, job: unknown, matchResult: unknown) {
-    return request("/applications/package", {
+  importJobUrl(url: string, candidateId?: string) {
+    return request<JobImportResult>("/jobs/import-url", {
+      method: "POST",
+      body: JSON.stringify({
+        url,
+        match_candidate_id: candidateId
+      })
+    });
+  },
+
+  previewMatch(candidate: CandidateProfile, job: JobRecord) {
+    return request<MatchResult>("/match", {
+      method: "POST",
+      body: JSON.stringify({ candidate, job })
+    });
+  },
+
+  createMatch(candidateId: string, jobId: string) {
+    return request<MatchResult & { id: string }>("/matches/persist", {
+      method: "POST",
+      body: JSON.stringify({
+        candidate_profile_id: candidateId,
+        job_description_id: jobId
+      })
+    });
+  },
+
+  generatePackage(candidate: CandidateProfile, job: JobRecord, matchResult: MatchResult) {
+    return request<ApplicationPackage>("/applications/package", {
       method: "POST",
       body: JSON.stringify({
         candidate: {
