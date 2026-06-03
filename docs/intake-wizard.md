@@ -38,6 +38,40 @@ Wizard state is persisted in browser session storage while the user is logged in
 | Application package | `POST /applications/package` | Generate deterministic package content from candidate, job, and match. |
 | Application | `POST /applications` | Create the real application aggregate. |
 
+`POST /match` expects this shape:
+
+```json
+{
+  "candidate": {
+    "name": "Candidate Name",
+    "headline": "Role headline",
+    "location": "Location",
+    "summary": "Short profile summary",
+    "target_roles": ["Target role"],
+    "skills": ["Skill"],
+    "experience_highlights": ["Evidence"],
+    "portfolio_links": []
+  },
+  "job": {
+    "title": "Job title",
+    "company": "Company",
+    "location": "Location",
+    "description": "Job description",
+    "required_skills": ["Required skill"],
+    "nice_to_have_skills": []
+  }
+}
+```
+
+The frontend normalizes the saved candidate response before calling `/match`
+because persisted candidate records use `display_name`, while the matching
+contract expects `candidate.name`.
+
+The frontend also normalizes imported job responses before calling `/match`.
+Imported jobs can omit optional skill arrays or return them as `null`; the
+matching contract expects `required_skills` and `nice_to_have_skills` to be
+arrays, so the wizard sends empty arrays when no skills are present.
+
 ## Candidate Intake
 
 The candidate form captures:

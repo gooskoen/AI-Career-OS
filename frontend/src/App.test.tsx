@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { App } from "./App";
 
 let packageFailure = false;
+let matchValidationFailure = false;
+let lastMatchPayload: any = null;
 
 const dashboard = {
   active_applications: 3,
@@ -64,7 +66,6 @@ const summary = {
 
 const candidate = {
   id: "candidate-1",
-  name: "Koen Demo",
   display_name: "Koen Demo",
   headline: "AI Operations Lead",
   location: "Belgium",
@@ -80,8 +81,8 @@ const job = {
   company: "ExampleTech",
   location: "Remote",
   description: "Lead workflow automation, reporting, analytics, and stakeholder delivery.",
-  required_skills: ["Python", "SQL", "workflow automation"],
-  nice_to_have_skills: ["BPMN"]
+  required_skills: null,
+  nice_to_have_skills: null
 };
 
 const match = {
@@ -118,6 +119,8 @@ const applicationPackage = {
 describe("App", () => {
   beforeEach(() => {
     packageFailure = false;
+    matchValidationFailure = false;
+    lastMatchPayload = null;
     sessionStorage.clear();
     vi.stubGlobal("fetch", vi.fn(mockFetch));
   });
@@ -188,9 +191,27 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("button", { name: "Generate Match" }));
 
     expect(await screen.findByText("86% match")).toBeInTheDocument();
+    expect(lastMatchPayload.candidate.name).toBe("Koen Demo");
+    expect(lastMatchPayload.candidate.display_name).toBeUndefined();
+    expect(lastMatchPayload.job.title).toBe("AI Operations Lead");
+    expect(lastMatchPayload.job.required_skills).toEqual([]);
+    expect(lastMatchPayload.job.nice_to_have_skills).toEqual([]);
     expect(screen.getByText("Python")).toBeInTheDocument();
     expect(screen.getByText("BPMN")).toBeInTheDocument();
     expect(screen.getByText("Add BPMN Modelling Project To CV")).toBeInTheDocument();
+  });
+
+  test("shows backend validation details when match payload is rejected", async () => {
+    matchValidationFailure = true;
+    renderAuthenticatedApp();
+
+    await createCandidateFromWizard();
+    await importTextJobFromWizard();
+    fireEvent.click(screen.getByRole("button", { name: "Generate Match" }));
+
+    expect(
+      await screen.findByText("Request validation failed: candidate.name: Field required")
+    ).toBeInTheDocument();
   });
 
   test("progresses from intake to application creation", async () => {
@@ -362,6 +383,14 @@ async function mockFetch(input: RequestInfo | URL, init?: RequestInit) {
     return json({ job, duplicate: false, match: null });
   }
   if (url.endsWith("/match")) {
+    lastMatchPayload = JSON.parse(String(init?.body));
+    if (matchValidationFailure) {
+      return jsonError(
+        "Request validation failed",
+        422,
+        [{ loc: ["body", "candidate", "name"], msg: "Field required" }]
+      );
+    }
     return json(match);
   }
   if (url.endsWith("/matches/persist")) {
@@ -388,9 +417,9 @@ function json(body: unknown) {
   );
 }
 
-function jsonError(message: string, status: number) {
+function jsonError(message: string, status: number, details: unknown = null) {
   return Promise.resolve(
-    new Response(JSON.stringify({ error: { message } }), {
+    new Response(JSON.stringify({ error: { message, details } }), {
       status,
       headers: { "Content-Type": "application/json" }
     })

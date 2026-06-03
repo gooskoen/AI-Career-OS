@@ -23,6 +23,17 @@ then reflected in `database/schema.sql` when the full schema reference changes.
 Alembic reads `DATABASE_URL` from the environment when available. If it is not set,
 the demo local PostgreSQL URL in `alembic.ini` is used.
 
+Use SQLAlchemy's psycopg v3 dialect in runtime and production examples:
+
+```text
+postgresql+psycopg://user:password@postgres:5432/database
+```
+
+Do not use the bare `postgresql://` form for production migration runs unless the
+image also installs a compatible default PostgreSQL driver. The backend image
+ships with `psycopg[binary]`, so the explicit `postgresql+psycopg://` scheme keeps
+Alembic, SQLAlchemy, and the application aligned on psycopg v3.
+
 ```bash
 alembic heads
 alembic upgrade head

@@ -75,10 +75,60 @@ async function request<T>(
 async function errorMessage(response: Response): Promise<string> {
   try {
     const body = await response.json();
-    return body?.error?.message ?? "Request failed";
+    const message = body?.error?.message ?? "Request failed";
+    const details = formatValidationDetails(body?.error?.details);
+    return details ? `${message}: ${details}` : message;
   } catch {
     return "Request failed";
   }
+}
+
+function formatValidationDetails(details: unknown): string {
+  if (!Array.isArray(details)) {
+    return "";
+  }
+  return details
+    .map((detail) => {
+      if (!detail || typeof detail !== "object") {
+        return "";
+      }
+      const record = detail as { loc?: unknown; msg?: unknown };
+      const location = Array.isArray(record.loc)
+        ? record.loc.filter((part) => part !== "body").join(".")
+        : "";
+      const message = typeof record.msg === "string" ? record.msg : "";
+      return [location, message].filter(Boolean).join(": ");
+    })
+    .filter(Boolean)
+    .join("; ");
+}
+
+function candidatePayload(candidate: CandidateProfile): CandidateProfile {
+  return {
+    name: candidate.name ?? candidate.display_name ?? "",
+    headline: candidate.headline ?? "",
+    location: candidate.location ?? "",
+    summary: candidate.summary ?? "",
+    target_roles: candidate.target_roles ?? [],
+    skills: candidate.skills ?? [],
+    experience_highlights: candidate.experience_highlights ?? [],
+    portfolio_links: candidate.portfolio_links ?? []
+  };
+}
+
+function jobPayload(job: JobRecord): JobRecord {
+  return {
+    id: job.id,
+    title: job.title ?? "",
+    company: job.company ?? "",
+    location: job.location ?? null,
+    description: job.description ?? "",
+    required_skills: job.required_skills ?? [],
+    nice_to_have_skills: job.nice_to_have_skills ?? [],
+    source: job.source ?? null,
+    source_url: job.source_url ?? null,
+    external_id: job.external_id ?? null
+  };
 }
 
 export const api = {
@@ -202,7 +252,7 @@ export const api = {
   previewMatch(candidate: CandidateProfile, job: JobRecord) {
     return request<MatchResult>("/match", {
       method: "POST",
-      body: JSON.stringify({ candidate, job })
+      body: JSON.stringify({ candidate: candidatePayload(candidate), job: jobPayload(job) })
     });
   },
 
@@ -220,19 +270,8 @@ export const api = {
     return request<ApplicationPackage>("/applications/package", {
       method: "POST",
       body: JSON.stringify({
-        candidate: {
-          name: candidate.name ?? candidate.display_name ?? "Demo Candidate",
-          headline: candidate.headline ?? "AI operations candidate",
-          location: candidate.location ?? "Remote",
-          summary: candidate.summary ?? "Private beta candidate profile.",
-          target_roles: candidate.target_roles ?? ["AI Operations"],
-          skills: candidate.skills ?? ["Python", "workflow automation"],
-          experience_highlights: candidate.experience_highlights ?? [
-            "Built workflow automation and reporting."
-          ],
-          portfolio_links: []
-        },
-        job,
+        candidate: candidatePayload(candidate),
+        job: jobPayload(job),
         match_result: matchResult
       })
     });

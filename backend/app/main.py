@@ -5,8 +5,11 @@
 
 from __future__ import annotations
 
+import os
+
 from fastapi import FastAPI, HTTPException
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.auth import require_auth_secret
 from app.errors import (
@@ -27,10 +30,38 @@ from app.routers import (
 
 require_auth_secret()
 
+DEFAULT_CORS_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+
+
+def parse_cors_origins(raw_origins: str | None = None) -> list[str]:
+    configured_origins = (
+        raw_origins
+        if raw_origins is not None
+        else os.getenv("CORS_ORIGINS", "")
+    )
+    origins = [
+        origin.strip().strip("[]").strip().strip("\"'")
+        for origin in configured_origins.split(",")
+        if origin.strip()
+    ]
+    return origins or DEFAULT_CORS_ORIGINS.copy()
+
+
 app = FastAPI(
     title="AI-Career-OS API",
     version="0.9.0",
     description="MVP backend for career application workflow demos.",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=parse_cors_origins(),
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 app.add_exception_handler(HTTPException, http_exception_handler)

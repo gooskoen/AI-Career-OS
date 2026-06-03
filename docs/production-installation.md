@@ -105,10 +105,26 @@ Required variables:
 POSTGRES_DB=ai_career_os
 POSTGRES_USER=ai_career_os
 POSTGRES_PASSWORD=replace-with-a-strong-database-password
-DATABASE_URL=postgresql://ai_career_os:replace-with-a-strong-database-password@postgres:5432/ai_career_os
+DATABASE_URL=postgresql+psycopg://ai_career_os:replace-with-a-strong-database-password@postgres:5432/ai_career_os
 AUTH_SECRET=replace-with-a-strong-auth-secret
 FRONTEND_API_BASE_URL=https://your-domain.example.com
+CORS_ORIGINS=https://your-domain.example.com
 ```
+
+For a private beta deployment accessed by LAN IP and separate frontend/backend
+ports, use the frontend browser origin in `CORS_ORIGINS`:
+
+```env
+FRONTEND_API_BASE_URL=http://192.168.1.130:8000
+CORS_ORIGINS=http://192.168.1.130:3000
+```
+
+Do not use `*` for `CORS_ORIGINS` in production. List the exact frontend origins
+that browsers will use.
+
+The production Docker Compose file passes `CORS_ORIGINS` into the backend
+service. If the variable is missing, the backend only allows local development
+origins: `http://localhost:3000` and `http://127.0.0.1:3000`.
 
 ### Generate A Strong AUTH_SECRET
 
@@ -605,17 +621,135 @@ Fix:
 - Confirm backend `/health` works.
 - Confirm frontend was rebuilt after changing API base URL.
 
+### Frontend Container Unhealthy But Page Loads
+
+Symptom:
+
+- `docker ps` shows the frontend container as `unhealthy`.
+- The frontend still responds successfully:
+
+```bash
+curl -I http://127.0.0.1:3000
+```
+
+Expected healthy runtime response:
+
+```text
+HTTP/1.1 200 OK
+```
+
+Likely cause:
+
+- The Docker healthcheck command uses a tool that is not available inside the
+  `node:22-alpine` frontend container.
+
+Fix:
+
+- Use the updated `docker-compose.prod.yml` frontend healthcheck, which uses
+  Node's built-in `fetch()` instead of `curl` or `wget`.
+- Rebuild and recreate the frontend container:
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build frontend
+```
+
+- Check health again:
+
+```bash
+docker ps
+```
+
 ### CORS Or API URL Issue
 
 Symptom:
 
 - Browser blocks requests.
+- Browser registration or login shows `Failed to fetch`.
+- Backend logs show preflight requests such as:
+
+```text
+OPTIONS /auth/register HTTP/1.1 405 Method Not Allowed
+OPTIONS /auth/login HTTP/1.1 405 Method Not Allowed
+```
+
+Cause:
+
+- The frontend and backend are different origins when they use different ports,
+  such as `http://192.168.1.130:3000` and `http://192.168.1.130:8000`.
+- The backend must explicitly allow the frontend origin with `CORS_ORIGINS`.
 
 Fix:
 
-- Prefer same-origin reverse proxy routing.
-- If using separate domains, configure backend CORS in a future hardening step.
 - Make sure frontend points at the public API URL users can reach.
+- Set `CORS_ORIGINS` to the frontend browser origin:
+
+```env
+CORS_ORIGINS=http://192.168.1.130:3000
+```
+
+- For local testing, comma-separated origins are supported:
+
+```env
+CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000,http://192.168.1.130:3000
+```
+
+- Do not use `*` in production. Add the exact frontend URLs instead.
+
+- Recreate the backend after changing `.env.production`:
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml up -d --build backend
+```
+
+### Register Returns 503 Service Unavailable
+
+Symptom:
+
+- Direct API call to `POST /auth/register` returns:
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "service_unavailable",
+    "message": "Database operation failed",
+    "details": null
+  }
+}
+```
+
+Cause:
+
+- The backend could not complete a database operation. Common causes are missing
+  migrations, incorrect `DATABASE_URL`, or a schema mismatch.
+
+Fix:
+
+- Check backend logs for the server-side exception. The API intentionally keeps
+  the response generic.
+- Confirm PostgreSQL is healthy:
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml ps postgres
+```
+
+- Confirm migrations are current:
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml run --rm migrations alembic current
+```
+
+- Run migrations if needed:
+
+```bash
+docker compose --env-file .env.production -f docker-compose.prod.yml run --rm migrations alembic upgrade head
+```
+
+- Confirm `DATABASE_URL` uses the psycopg v3 SQLAlchemy dialect:
+
+```env
+DATABASE_URL=postgresql+psycopg://ai_career_os:replace-with-a-strong-database-password@postgres:5432/ai_career_os
+```
 
 ### Login Fails
 

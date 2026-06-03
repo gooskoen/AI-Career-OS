@@ -9,7 +9,7 @@ services:
       context: .
       dockerfile: backend/Dockerfile
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql://career_os:career_os@db:5432/career_os}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://career_os:career_os@db:5432/career_os}
     ports:
       - "8000:8000"
     depends_on:
